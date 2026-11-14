@@ -1,0 +1,128 @@
+{
+ "name": "pixel",
+ "label": "Пиксель",
+ "description": "Мир 8-битной игры: синее небо, пиксельные облака и солнце, зелёные холмы-полукруги, круглые деревья, кирпичная земля, блоки с «?», монета и пиксельный самолётик; счёт игры в углу (HUD), светлое игровое окно с пиксельной рамкой под каркасом и содержанием. Заголовок нарисован пикселями кодом. Мир стоит на сетке 8 px; всё движется ступенями «на тройках» (содержание — без сетки: сетка сдвигает посадку move мимо цели, V6). Сверх мира стиль даёт сцене набор window.PixelKit (спрайты из клеток, дом с вывеской, гирлянда, такси, надпись клетками) — им разметка сцены рисует свой город и своего героя.",
+ "use_for": "игровая подача: викторина, «уровни» обучения, прохождение шагов процедуры как уровней (catalog/styles.md)",
+ "decor": {
+  "sky": "#5C94FC",
+  "sky_dark": "#3F6FD8",
+  "screen": "#FFF7E4",
+  "frame": "#1B1F3B",
+  "cloud": "#FFFFFF",
+  "cloud_shade": "#BFD9FF",
+  "sun": "#FFD23F",
+  "sun_edge": "#F08A24",
+  "hill": "#3FAE49",
+  "hill_dark": "#1E7A32",
+  "trunk": "#8B5A2B",
+  "brick": "#C8642C",
+  "brick_dark": "#7A3414",
+  "block": "#F4B23A",
+  "coin": "#FFCE3A",
+  "title": "#1B1F3B",
+  "title_shade": "#F08A24",
+  "hud": "#FFFFFF",
+  "cap": "#3F6FD8",
+  "ear": "#F2A9A0",
+  "fir": "#1E7A32",
+  "fir_light": "#3FAE49",
+  "garland": "#FFD23F",
+  "garland_warm": "#F08A24",
+  "horse": "#8B5A2B",
+  "horse_dark": "#5A3A1C",
+  "lamp_cool": "#5CE1E6",
+  "sky_dusk": "#3F6FD8",
+  "snow": "#FFFFFF",
+  "snow_shade": "#BFD9FF",
+  "steel": "#8A93A6",
+  "steel_dark": "#4A5266",
+  "taxi": "#FFD23F",
+  "red": "#E63946"
+ },
+ "fonts": {
+  "title": {
+   "kind": "code",
+   "note": "заголовок рисует plugin.js пикселями: StyleCore.pixelText (кириллица — системный Arial, порог 50 %), клетка 5 px (меньше, если строка длиннее рамки) и тень на клетку"
+  }
+ },
+ "objects": [
+  "hill",
+  "plane",
+  "tree",
+  "blocks",
+  "cloud",
+  "coin",
+  "pipe",
+  "sun",
+  "hud",
+  "bricks"
+ ],
+ "params": {
+  "win_pad_px": 14,
+  "unit_px": 8,
+  "window_in": [
+   0.5,
+   1.95,
+   19.0,
+   9.0
+  ],
+  "ground_px": 28,
+  "title_rows": 9,
+  "title_cell": 5,
+  "title_cell_min": 3,
+  "hud_score": 2190,
+  "hud_step_sec": 0.5,
+  "hud_rows": 10,
+  "hud_cell": 3,
+  "cloud_speed_units": 1.5,
+  "coin_frames_sec": 0.2,
+  "plane_bob_units": 2,
+  "enter_gap": 0.18,
+  "enter_from": 0.2,
+  "enter_drop_units": 3,
+  "lock_grid_alpha": 0.06,
+  "lock_grid_role": "ink",
+  "step_frames": 3
+ },
+ "motion": {
+  "icon_step_frames": 3,
+  "icon_overshoot": 0,
+  "step_frames": 3
+ },
+ "sfx": {
+  "_comment": "материал звука: меандр (wave square), 4 бита и удержание отсчёта — звук приставки",
+  "clips": {
+   "whoosh_click": {
+    "wave": "square",
+    "bits": 4,
+    "hold": 6,
+    "lp_hz": 7000
+   },
+   "ping": {
+    "wave": "square",
+    "bits": 5,
+    "hold": 4
+   },
+   "tick": {
+    "wave": "square",
+    "bits": 4,
+    "hold": 4
+   },
+   "click": {
+    "wave": "square",
+    "bits": 4,
+    "hold": 4
+   },
+   "chime": {
+    "wave": "square",
+    "bits": 5,
+    "hold": 3
+   }
+  }
+ },
+ "never": [
+  "пиксельный шрифт основного текста — пикселями только заголовок",
+  "мигание счёта и монет чаще порога V23",
+  "мир под текстом: небо и земля — только по краям и в decor_zones"
+ ]
+}

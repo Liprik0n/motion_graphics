@@ -1,0 +1,38 @@
+{
+ "name": "zine",
+ "label": "Зин-коллаж",
+ "description": "Мир самиздатовского журнала: серая бумага с волокнами, полосы «авиа» сверху и снизу, обрывок ленты плёнки у правого края и тетрадный клочок слева; в зонах сцены — наклеенные вырезки: розовый квадрат с растром и словом «ШУМ», жёлтый лист с молнией, тетрадный клочок с пометкой, марка со штемпелем, красная звезда-взрыв, фото с растром. Каждая вырезка — с рваным краем и полоской скотча. Заголовок — буквами, вырезанными из разных журналов (кодом). Карточки приклеены скотчем по углам. Движение — стоп-моушен «на тройках»: вырезки шлёпаются с перелётом и подрагивают.",
+ "use_for": "живая подача мнения, мифы и правда, «чего не делать», чек-лист нарушений (catalog/styles.md)",
+ "decor": {
+  "paper": "#E9E6DF", "paper_light": "#F6F3EC", "black": "#141414", "white": "#FFFFFF", "pink": "#E8327A",
+  "yellow": "#F5D547", "red": "#D9302C", "blue": "#2C4FB0", "tape": "#E8DDB0", "ruled": "#9DB7D6",
+  "margin": "#E07A6E", "film": "#1E1E1E", "hole": "#D8D4CA", "shadow": "#8A857A"
+ },
+ "fonts": {
+  "title": {"kind": "code", "note": "заголовок рисует plugin.js: каждая буква вырезана из «своего журнала» — плашка своего цвета, системный шрифт из params.cut_fonts (Impact, Georgia, Arial Black, Courier New, Times New Roman, Comic Sans MS — все с кириллицей), поворот и сдвиг от сида"},
+  "decor": {"family": "Courier New", "files": ["courbd.ttf", "consolab.ttf"], "weight": 700}
+ },
+ "objects": ["noise", "bolt", "note", "stamp", "star", "photo", "tape", "airmail", "film-scrap"],
+ "params": {
+  "win_pad_px": 14,
+  "paper_alpha": 0.09, "paper_seed": 71,
+  "airmail_y_px": 10, "airmail_h_px": 18, "airmail_seg_px": 26,
+  "cut_fonts": ["Impact", "Georgia", "Arial Black", "Courier New", "Times New Roman", "Comic Sans MS"],
+  "cut_size_px": 50, "cut_tile_h_px": 58, "cut_pad_px": 7, "cut_rot_deg": 5, "cut_dy_px": 2, "cut_space_px": 16,
+  "tilt_deg": 7, "wobble_deg": 0.7, "slap_scale": 0.35, "slap_sec": 0.3, "enter_from": 0.25, "enter_gap": 0.22,
+  "tape_w_px": 96, "tape_h_px": 28, "tape_alpha": 0.82, "lock_tape_role": "line",
+  "step_frames": 3
+ },
+ "motion": {"icon_step_frames": 3, "icon_overshoot": 1.2, "step_frames": 3, "overshoot": 1.0},
+ "sfx": {
+  "_comment": "материал звука: бумага и ножницы — шорох (grit), шлепок вырезки (noise_burst), глухой верх (lp_hz)",
+  "clips": {
+   "whoosh_click": {"grit": 0.55, "noise_burst": 0.45, "lp_hz": 4200},
+   "ping": {"grit": 0.2, "lp_hz": 5200},
+   "tick": {"grit": 0.5, "noise_burst": 0.3, "lp_hz": 3800},
+   "click": {"grit": 0.4, "noise_burst": 0.5, "lp_hz": 4000},
+   "thump": {"grit": 0.35, "noise_burst": 0.6, "lp_hz": 3000}
+  }
+ },
+ "never": ["вырезанные буквы в основном тексте — только заголовок", "скотч и вырезки поверх строк текста", "больше 6 вырезок на сцену: коллаж не должен спорить с содержанием"]
+}

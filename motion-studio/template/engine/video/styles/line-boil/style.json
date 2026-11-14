@@ -1,0 +1,39 @@
+{
+ "name": "line-boil",
+ "label": "Лайн-бойл",
+ "description": "Мир мультфильма на бумаге: тёплый лист, холмы с чернильной штриховкой, облака, домик с оранжевой крышей, круглые деревья, кусты травы, заборчик и бумажный самолётик с пунктиром полёта. Каждая линия кипит — рисунок перерисовывается «на двойках», чернильная обводка у карточек и плашек дрожит; заголовок — округлым рукописным.",
+ "use_for": "пролог, маскот, сюжетная вставка «история нарушителя» — не дольше 10–15 с под плотной речью (catalog/styles.md)",
+ "decor": {
+  "paper": "#F6F0DF", "ink": "#2B2724", "hatch": "#8C8172", "hill": "#E9DDC0", "hill_far": "#EFE6CF",
+  "roof": "#E8784A", "wall": "#FFF8E8", "leaf": "#8CC46E", "leaf_dark": "#5E9A4A", "trunk": "#9A6B45",
+  "cloud": "#FFFFFF", "sun": "#F4C84A"
+ },
+ "fonts": {
+  "title": {"family": "Comic Sans MS", "files": ["comicbd.ttf", "segoeprb.ttf"], "weight": 700,
+            "note": "округлый рукописный, системный Windows (кириллица проверяется сборкой); нет файла — заголовок фирменным"},
+  "decor": {"family": "Comic Sans MS", "files": ["comic.ttf", "segoepr.ttf"], "weight": 400}
+ },
+ "objects": ["house", "tree", "plane", "cloud", "fence", "grass", "hills", "sun"],
+ "params": {
+  "win_pad_px": 14,
+  "ink_width": 2.6, "outline_width": 3.2, "outline_gap_px": 6, "jitter_px": 2.2,
+  "outline": [".k-card", ".k-plaque", ".k-box", ".k-quiz"],
+  "boil_scale": 3.2, "boil_freq": 0.028,
+  "hatch_gap_px": 7, "hatch_alpha": 0.55,
+  "hills_top_in": 6.9, "hills_bottom_in": 10.08,
+  "paper_alpha": 0.06, "paper_seed": 41,
+  "draw_in": 0.8, "draw_gap": 0.3, "draw_from": 0.25,
+  "cloud_drift_px": 40, "plane_loop_sec": 5,
+  "lock_ink_role": "ink", "lock_alpha": 0.7
+ },
+ "motion": {"icon_step_frames": 2, "icon_overshoot": 1.2, "step_frames": 2, "jitter_px": 1.2},
+ "sfx": {
+  "_comment": "материал звука: перо по бумаге — шорох (grit) и приглушённый верх (lp_hz)",
+  "clips": {
+   "whoosh_click": {"lp_hz": 3600, "grit": 0.4},
+   "ping": {"lp_hz": 5200, "grit": 0.2},
+   "tick": {"lp_hz": 4200, "grit": 0.45}
+  }
+ },
+ "never": ["кипение на тексте речи — только линии рисунка и обводка", "рукописный шрифт основного текста", "под плотной речью дольше 15 с"]
+}

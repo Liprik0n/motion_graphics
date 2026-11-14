@@ -1,0 +1,23 @@
+{
+ "_comment": "Музыка проекта. tracks[]: chapter — id главы из project.json или \"*\" (любая глава без своего трека); file — от корня проекта; license — источник и условия, ОБЯЗАТЕЛЬНО (пусто — music.py отказывает). Порядок работы: сначала библиотека с лицензией, генерация — запасной путь (process/06-music.md). Демо везёт один трек-заглушку: синтезированный пэд (music.py --placeholder), период 20 с, круг бесшовен. Заменить треком с лицензией; check_mix.py --final краснеет, пока в license стоит «ЗАГЛУШКА». Круг: loop_in/loop_out — точки (секунды трека), нужны, если трек короче части; выход уточняется поиском похожей фразы в пределах loop_search_sec. Числа — замер прошлого ролика (process/06-music.md): ducking 20 дБ, -16 LUFS, -1 dBTP; пороги проверки margin_min_db (15), voice_tol_db (0,5), lufs_tol (1) — допуски измерения, а не цели сборки.",
+ "tracks": [
+  {"chapter": "*", "file": "music/placeholder-pad.wav",
+   "license": "ЗАГЛУШКА: синтезированный пэд (engine/audio/synth.py), прав третьих лиц нет — заменить треком с лицензией и записать здесь источник и условия",
+   "gain_db": 0.0, "start_sec": 0.0, "loop_in": 2.0, "loop_out": 22.0}
+ ],
+ "xfade_sec": 2.5,
+ "loop_xfade_sec": 3.0,
+ "first_fade_sec": 0.5,
+ "loop_search_sec": 0.15,
+ "track_lufs": -20.0,
+ "duck_db": 20.0,
+ "duck_min_db": 18.0,
+ "raise_db": 6.0,
+ "raise_gap_sec": 1.2,
+ "target_lufs": -16.0,
+ "peak_dbtp": -1.0,
+ "limiter_margin_db": 0.6,
+ "lufs_tol": 1.0,
+ "margin_min_db": 15.0,
+ "voice_tol_db": 0.5
+}

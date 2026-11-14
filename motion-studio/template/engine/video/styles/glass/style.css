@@ -1,0 +1,5 @@
+/* Стекло: CSS только привязанный к стилю. Палитру и шрифт текста не трогать (V22).
+   Фактура, годная и под замком бренда: карточки и плашки — со скруглением и мягкой тенью, как стеклянные. */
+.scene[data-style="glass"] .k-card,
+.scene[data-style="glass"] .k-plaque,
+.scene[data-style="glass"] .k-box { border-radius: 16px; box-shadow: 0 14px 36px rgba(26, 28, 30, 0.28); }

@@ -1,0 +1,10 @@
+{
+ "title": "Демо стилей: одна сцена в нескольких стилях",
+ "scenes": ["style-probe"],
+ "styles": ["none", "sketchbook", "film", "line-boil", "engravure", "comic", "glass", "paper-cut", "pixel", "zine", "fabric", "clay", "flat-edu", "neon-line", "tv-splash"],
+ "replies": [
+  {"n": 1, "scene": "style-probe", "voice": "a", "emotion": "Happy", "file": "demo-audio/130.mp3"},
+  {"n": 2, "scene": "style-probe", "voice": "b", "emotion": "Neutral", "file": "demo-audio/131.mp3"}
+ ],
+ "_comment": "Демо механизма стилей (engine/video/styles/README.md): build.py styles собирает сцену style-probe в каждом стиле списка styles — <out>/styles/<стиль>/ — и кладёт <out>/styles/styles-sheet.png (строка на стиль). none — бренд без стиля, кадр для сравнения. Звук — реплики 1–2 демо (mp3 демо-шаблона). Проверка: check.py styles (все проходы) или check.py styles/<стиль>."
+}

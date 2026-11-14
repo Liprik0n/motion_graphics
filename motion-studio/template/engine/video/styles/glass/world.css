@@ -1,0 +1,5 @@
+/* Стекло, режим «мир»: заголовок — тонким гротеском (--sty-glass-title объявляет сборка), цвет — роль бренда;
+   строка стоит на матовой плашке шапки (plugin.js). Карточки на тёмном — со светлым ободком стекла (decor.rim). */
+#root[data-style="glass"] .fr-title { font-family: var(--sty-glass-title); font-size: 50px; letter-spacing: 0.5px; }
+.scene[data-style="glass"] .k-card,
+.scene[data-style="glass"] .k-plaque { box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.7), 0 18px 46px rgba(10, 14, 36, 0.6); }

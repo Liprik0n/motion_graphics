@@ -1,0 +1,103 @@
+{
+ "name": "comic",
+ "label": "Комикс",
+ "description": "Мир комикса: газетный лист с полутоном, зоны сцены — панели в толстой чёрной рамке: в одной солнечные лучи, звезда-взрыв «БАХ!» и молния, в другой — розовый полутон, облачко реплики «ОЙ!», линии скорости и звёздочки. Карточки и плашки — в чёрной обводке с жёсткой тенью; плашки и иконки входят с отскоком, лучи поворачиваются ступенями «на тройках». Стиль точечный: для акцента, не для фона ролика. Сверх мира стиль даёт сцене набор window.ComicKit (тушь, перо, полутон, такси, вертолёт, проход лопастей) — им разметка сцены рисует свой мир и своего героя.",
+ "use_for": "точечно: инцидент, нарушение, «что пошло не так» — удар и звук; 1 сцена на блок, не основной фон (catalog/styles.md)",
+ "decor": {
+  "newsprint": "#FFF9EC",
+  "ink": "#151515",
+  "sun": "#FFD23F",
+  "orange": "#FF9F1C",
+  "red": "#E63946",
+  "pink": "#FF6FB5",
+  "sky": "#4CC9F0",
+  "white": "#FFFFFF",
+  "night": "#1B1F3B",
+  "snow_shade": "#BFD9FF",
+  "steel": "#8A93A6",
+  "steel_dark": "#4A5266"
+ },
+ "fonts": {
+  "title": {
+   "family": "Impact",
+   "files": [
+    "impact.ttf",
+    "ariblk.ttf"
+   ],
+   "weight": 400,
+   "note": "плакатный гротеск, системный Windows (кириллица проверяется сборкой); нет файла — заголовок фирменным"
+  },
+  "decor": {
+   "family": "Impact",
+   "files": [
+    "impact.ttf",
+    "ariblk.ttf"
+   ],
+   "weight": 400
+  }
+ },
+ "objects": [
+  "rays",
+  "boom",
+  "bolt",
+  "bubble",
+  "speedlines",
+  "stars",
+  "halftone",
+  "panels"
+ ],
+ "params": {
+  "win_pad_px": 14,
+  "panel_border_px": 6,
+  "panel_pad_px": 10,
+  "dot_cell_px": 12,
+  "dot_r_px": 2.2,
+  "page_dot_alpha": 0.1,
+  "rays": 22,
+  "rays_turn_deg": 3,
+  "rays_step_frames": 3,
+  "boom_at": 0.9,
+  "boom_in": 0.35,
+  "boom_overshoot": 2.2,
+  "bubble_at": 1.6,
+  "bolt_at": 1.2,
+  "shadow_px": 8,
+  "outline": [
+   ".k-card",
+   ".k-plaque",
+   ".k-box",
+   ".k-quiz"
+  ],
+  "boom_text": "БАХ!",
+  "bubble_text": "ОЙ!",
+  "lock_role": "ink",
+  "lock_dot_alpha": 0.06
+ },
+ "motion": {
+  "icon_step_frames": 1,
+  "icon_overshoot": 2.4,
+  "overshoot": 1.8,
+  "move_overshoot": 1.5
+ },
+ "sfx": {
+  "_comment": "материал звука: удар-«бах» (noise_burst) и звонкий верх — комиксный хлопок",
+  "clips": {
+   "whoosh_click": {
+    "noise_burst": 0.7,
+    "lp_hz": 9000
+   },
+   "ping": {
+    "noise_burst": 0.35,
+    "partials": 0.3
+   },
+   "tick": {
+    "noise_burst": 0.5
+   }
+  }
+ },
+ "never": [
+  "весь ролик в комиксе — только акцентная сцена",
+  "лучи и полутон под строкой текста",
+  "мигание и вспышки чаще порога (V23)"
+ ]
+}

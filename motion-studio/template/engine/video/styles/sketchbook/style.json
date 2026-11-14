@@ -1,0 +1,40 @@
+{
+ "name": "sketchbook",
+ "label": "Скетчбук",
+ "description": "Мир тетради: тёплый клетчатый лист с полями, карандашные рисунки от руки (куб в перспективе, самолётик, цветы, солнце, облако, домик, стрелка-пометка), жёлтый карандаш на листе, рукописный заголовок; карандашная обводка карточек со штрихованной тенью; линии рисуются и кипят «на двойках», иконки входят ступенями с перелётом.",
+ "use_for": "объяснение «на салфетке»: схемы доступа, потоки данных, стрелки между понятиями (catalog/styles.md, пресет 1)",
+ "decor": {
+  "paper": "#FBF8F0", "grid": "#C5D6E6", "grid_major": "#A9C1DA", "margin": "#E8988A",
+  "pencil": "#3D3C3A", "graphite": "#8A8782", "sun": "#F6D36B", "roof": "#E9A27A", "leaf": "#9CC48A",
+  "pencil_body": "#F2C230", "pencil_wood": "#EBCB9F"
+ },
+ "fonts": {
+  "title": {"family": "Segoe Print", "files": ["segoeprb.ttf", "segoepr.ttf", "comicbd.ttf"], "weight": 700,
+            "note": "рукописный, системный Windows (кириллица проверяется сборкой); нет файла — заголовок фирменным"},
+  "decor": {"family": "Segoe Print", "files": ["segoepr.ttf", "comic.ttf"], "weight": 400}
+ },
+ "objects": ["cube", "plane", "flowers", "sun", "cloud", "house", "arrow", "pencil"],
+ "params": {
+  "win_pad_px": 14,
+  "grid_cell_in": 0.25, "grid_major": 4, "margin_x_in": 0.95,
+  "lock_grid_role": "ink", "lock_grid_alpha": 0.09, "lock_major_alpha": 0.16, "lock_margin_role": "accent", "margin_alpha": 0.35,
+  "paper_alpha": 0.05, "paper_seed": 17,
+  "pencil_alpha": 0.78, "pencil_width": 2.0, "outline_gap_px": 7, "jitter_px": 2.4,
+  "step_frames": 2,
+  "outline": [".k-card", ".k-plaque", ".k-box", ".k-quiz"], "circle": [".step-num", ".bl-marker"],
+  "shadow_px": [12, 12], "hatch_gap_px": 6, "hatch_alpha": 0.5,
+  "title_underline": true,
+  "boil_scale": 2.2, "boil_freq": 0.035,
+  "draw_in": 0.9, "draw_gap": 0.35, "draw_from": 0.3
+ },
+ "motion": {"icon_step_frames": 2, "icon_overshoot": 1.6},
+ "sfx": {
+  "_comment": "материал звука: поверх синтеза клипа engine/audio/synth.py — шорох бумаги (grit) и глухость карандаша (lp_hz)",
+  "clips": {
+   "whoosh_click": {"lp_hz": 3200, "grit": 0.35},
+   "ping": {"lp_hz": 5000, "grit": 0.15},
+   "tick": {"lp_hz": 4000, "grit": 0.4}
+  }
+ },
+ "never": ["рукописный шрифт основного текста — только заголовок", "рисунки под текстом: только decor_zones и поля", "кипение на тексте речи"]
+}

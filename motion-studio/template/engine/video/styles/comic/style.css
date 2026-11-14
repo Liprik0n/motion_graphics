@@ -1,0 +1,5 @@
+/* Комикс: CSS только привязанный к стилю. Палитру и шрифт текста не трогать (V22).
+   Фактура, годная и под замком бренда: жёсткая тень карточек и плашек (цвет — роль бренда ink). */
+.scene[data-style="comic"] .k-card,
+.scene[data-style="comic"] .k-plaque,
+.scene[data-style="comic"] .k-box { box-shadow: 6px 6px 0 rgba(26, 28, 30, 0.85); }

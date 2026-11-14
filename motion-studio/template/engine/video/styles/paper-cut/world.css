@@ -1,0 +1,6 @@
+/* Бумага-вырезка, режим «мир»: заголовок — округлым гротеском (--sty-paper-cut-title объявляет сборка),
+   цвет — роль бренда; тень карточек — цветом тени мира (decor.shadow). */
+#root[data-style="paper-cut"] .fr-title { font-family: var(--sty-paper-cut-title); font-size: 52px; }
+.scene[data-style="paper-cut"] .k-card,
+.scene[data-style="paper-cut"] .k-plaque,
+.scene[data-style="paper-cut"] .k-box { box-shadow: 6px 8px 7px rgba(47, 74, 68, 0.3); }

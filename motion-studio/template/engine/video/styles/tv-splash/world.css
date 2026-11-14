@@ -1,0 +1,4 @@
+/* Мир стиля «заставка»: заголовок каркаса — шрифтом стиля (V22) и светлой ролью бренда: фон мира тёмный,
+   строка заголовка стоит прямо на нём (V21). Фон и предметы рисует plugin.js. */
+#root[data-style="tv-splash"] .fr-title { font-family: var(--sty-tv-splash-title); }
+#root[data-style="tv-splash"] .fr-title .t { color: var(--c-paper); }

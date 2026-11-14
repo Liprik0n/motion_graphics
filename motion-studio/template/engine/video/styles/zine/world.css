@@ -1,0 +1,3 @@
+/* Зин-коллаж, режим «мир» (не кладётся при project.json style_brand_lock: true).
+   Заголовок рисует plugin.js вырезанными буквами (fonts.title.kind "code"); текст каркаса остаётся для раскладки и V10, но не виден. */
+#root[data-style="zine"] .fr-title .t { color: transparent; }

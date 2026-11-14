@@ -1,0 +1,3 @@
+/* Плёнка, режим «мир» (не кладётся при project.json style_brand_lock: true).
+   Заголовок сцены — антиквой стиля (--sty-film-title объявляет сборка из style.json fonts); цвет — роль бренда. */
+#root[data-style="film"] .fr-title { font-family: var(--sty-film-title); }

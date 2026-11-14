@@ -1,0 +1,6 @@
+/* Пиксель: CSS только привязанный к стилю (.scene[data-style="pixel"], #root[data-style="pixel"]).
+   Годится и под замком бренда: прямые углы и жёсткая тень на клетку — цвет тени роль бренда ink. */
+.scene[data-style="pixel"] .k-card,
+.scene[data-style="pixel"] .k-plaque { border-radius: 0; box-shadow: 8px 8px 0 rgba(26, 28, 30, 0.85); }
+.scene[data-style="pixel"] .k-icon svg,
+.scene[data-style="pixel"] .ico svg { shape-rendering: crispEdges; }

@@ -1,0 +1,27 @@
+<!-- Фикстура движка: часы, фигура и крышка с исполнителями меток act, положения камеры. Содержание стоит внутри
+     рамки near (камера в начале смотрит туда на треть крупнее) и в рабочей зоне каркаса; подпись и часы касаются
+     друг друга (опора V15). Цифр в разметке нет: время считает плагин clock (V30, сторож текста V34). -->
+<div class="el" id="label" style="left:560px; top:420px; width:400px; height:80px;">
+  <span class="t" style="display:block; width:400px; line-height:80px; text-align:center; font-size:48px; font-weight:700; color:var(--c-ink); white-space:nowrap;">Сцена</span>
+</div>
+<div class="el" id="clock" style="left:960px; top:420px; width:280px; height:80px; background:var(--c-ink);"></div>
+<div class="el" id="figure" style="left:560px; top:560px; width:300px; height:80px;">
+  <span class="t" style="display:block; width:240px; line-height:80px; font-size:40px; color:var(--c-text); white-space:nowrap;">Фигура</span>
+  <div id="figure-mark" style="position:absolute; left:250px; top:20px; width:40px; height:40px; background:var(--c-accent); opacity:0;"></div>
+</div>
+<div class="el" id="lid" style="left:940px; top:560px; width:300px; height:80px;">
+  <span class="t" style="display:block; width:240px; line-height:80px; font-size:40px; color:var(--c-text); white-space:nowrap;">Крышка</span>
+  <div id="lid-mark" style="position:absolute; left:250px; top:20px; width:40px; height:40px; background:var(--c-primary); opacity:0;"></div>
+</div>
+<div class="cam-pos" data-cam="near" style="left:240px; top:135px; width:1440px; height:810px;"></div>
+<div class="cam-pos" data-cam="wide" style="left:0px; top:0px; width:1920px; height:1080px;"></div>
+<script>
+/* исполнители меток act (engine/video/plugins/act.js): состояние — чистая функция t по всем своим меткам */
+(window.ActExec = window.ActExec || []).push(
+  { scene: 'act-stage', who: 'figure', run: function (t, cues) {
+      document.getElementById('act-stage--figure-mark').style.opacity = cues[0].e.toFixed(3);
+  } },
+  { scene: 'act-stage', who: 'lid', run: function (t, cues) {
+      document.getElementById('act-stage--lid-mark').style.opacity = cues[0].local >= 0 ? '1' : '0';
+  } });
+</script>

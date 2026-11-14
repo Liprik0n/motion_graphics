@@ -1,0 +1,10 @@
+{
+ "title": "Фикстура: вариант фильма без двух строк (ключ hide)",
+ "scenes": ["act-sign"],
+ "hide": ["head", "when"],
+ "replies": [
+  {"n": 3, "scene": "act-sign", "voice": "a", "emotion": "Fluent", "file": "demo-audio/142.mp3"},
+  {"n": 4, "scene": "act-sign", "voice": "b", "emotion": "Neutral", "file": "demo-audio/145.mp3"}
+ ],
+ "_comment": "Фикстура ключа фильма hide (V33): та же сцена act-sign, элементы head и when скрыты — в кадре их нет ни разу, биты на них сняты; фильм acts с той же сценой показывает оба. Так делают вариант ролика (без даты, без таймера), не копируя сцену. Порчи — engine/video/checks/red_acts.py."
+}

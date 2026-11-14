@@ -1,0 +1,10 @@
+{
+  "name": "motion-studio-engine",
+  "private": true,
+  "description": "Зависимости движка видео шаблона motion-studio: композиция HyperFrames, анимация GSAP, безголовый Chrome для промеров",
+  "dependencies": {
+    "gsap": "3.13.0",
+    "hyperframes": "0.8.181",
+    "puppeteer-core": "25.16.0"
+  }
+}

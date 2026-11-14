@@ -1,0 +1,16 @@
+{
+ "scene": "bare-start",
+ "title": "Картинка-кадр и помехи",
+ "frame": false,
+ "start_image": "assets/start-frame.png",
+ "markup": "markup.html",
+ "notes": "Фикстура движка (films/bare.json; на ней стоят порчи engine/video/checks/red_bare.py — не удалять, пока нужны условия V26–V29). Сцена без каркаса: первый кадр — картинка-кадр (элемент start-image кладёт сборка), в окне реплики 1 — помехи плагина glitch (числа — tokens.json motion.glitch, здесь только окно); на реплике 2 поверх картинки входит плашка.",
+ "start_state": {},
+ "end_state": {},
+ "plugins": {
+  "glitch": {"from": {"reply": 1, "at": 0.05}, "to": {"reply": 1, "at": 0.75}}
+ },
+ "beats": [
+  {"reply": 2, "at": 0.15, "action": "show", "targets": ["note"], "anim": "fade"}
+ ]
+}

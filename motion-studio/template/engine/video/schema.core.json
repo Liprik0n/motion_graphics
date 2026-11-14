@@ -1,0 +1,1276 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "schema.json",
+ "title": "Раскадровка сцены ролика",
+ "description": "Одна сцена = раскадровка (данные) + не больше одного файла своей разметки. Время — номер реплики и доля её длительности (+ сдвиг), секунд нет. Координаты — дюймы полотна (project.json canvas); сборка × px_per_in. Каркас (заголовок, номер, трекер глав, футер, голос) рисует движок. Цвета — имена ролей палитры tokens.json, главы — id из project.json: enum подставляет генератор (storyboard.py), ручной копии нет.",
+ "type": "object",
+ "additionalProperties": false,
+ "required": [
+  "scene",
+  "title",
+  "start_state",
+  "end_state",
+  "beats"
+ ],
+ "dependentRequired": {
+  "chapter_from": [
+   "chapter_at"
+  ],
+  "chapter_at": [
+   "chapter_from"
+  ]
+ },
+ "properties": {
+  "$schema": {
+   "type": "string"
+  },
+  "scene": {
+   "type": "string",
+   "pattern": "^[a-z0-9-]+$",
+   "description": "Имя папки сцены в scenes/"
+  },
+  "number": {
+   "type": "integer",
+   "minimum": 1,
+   "maximum": 999,
+   "description": "Номер сцены в кадре (каркас); без поля — порядковый номер сцены в фильме"
+  },
+  "title": {
+   "type": "string",
+   "description": "Заголовок сцены дословно — как в источнике текста (шов заголовка)"
+  },
+  "frame": {
+   "type": "boolean",
+   "description": "false — сцена без каркаса учебного жанра: ни заголовка, ни номера, ни трекера глав, ни линий, ни футера, ни полосок голоса (промо, заставка, шорт). С ним нельзя title_at, num_at, chapter_at, tracker_emph. Без поля — каркас есть"
+  },
+  "start_image": {
+   "type": "string",
+   "pattern": "^[A-Za-z0-9_./-]+\\.png$",
+   "description": "Сцена начинается с готовой картинки-кадра: PNG размером с полотно, путь от корня проекта. Сборка кладёт её элементом «start-image» (слой under, видна с первого кадра на 1,0, без трансформаций) — бит может её двигать, приглушать, убирать; первый кадр сцены = картинка пиксель в пиксель"
+  },
+  "plugins": {
+   "type": "object",
+   "propertyNames": {
+    "pattern": "^[a-z0-9-]+$"
+   },
+   "additionalProperties": {
+    "type": "object"
+   },
+   "description": "Настройки плагинов движка для этой сцены: {имя: {...}} — плагин engine/video/plugins/<имя>.js подключается сам. Любое значение-момент {reply, at, offset} сборка переводит в секунды фильма. Поля плагинов — engine/video/plugins/README.md"
+  },
+  "title_at": {
+   "$ref": "#/$defs/when",
+   "description": "Заголовок входит на этом бите (0,35 с), до него пуст. Без поля — входит на стыке, как номер"
+  },
+  "num_at": {
+   "$ref": "#/$defs/when",
+   "description": "Смена номера сцены на этом бите, а не на стыке: номер прошлой сцены гаснет за 0,35 с до бита, свой входит 0,35 с после. Без поля — на стыке"
+  },
+  "chapter": {
+   "$ref": "#/$defs/chapter_or_null",
+   "description": "Активная плашка трекера глав (id из project.json chapters); null — без активной. С chapter_from — глава после смены"
+  },
+  "chapter_from": {
+   "$ref": "#/$defs/chapter",
+   "description": "Глава трекера в начале сцены; на бите chapter_at заливка едет к chapter. Только вместе с chapter_at"
+  },
+  "chapter_at": {
+   "$ref": "#/$defs/when",
+   "description": "Бит смены главы chapter_from → chapter"
+  },
+  "style": {
+   "enum": "@styles+null",
+   "description": "Стиль сцены — имя папки engine/video/styles/<имя> или <проект>/styles/<имя>; перекрывает стиль фильма и project.json style. null или \"none\" — сцена без стиля (бренд как есть)"
+  },
+  "decor_zones": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+     "x",
+     "y",
+     "w",
+     "h"
+    ],
+    "properties": {
+     "x": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": "@canvas_w_in"
+     },
+     "y": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": "@canvas_h_in"
+     },
+     "w": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": "@canvas_w_in"
+     },
+     "h": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": "@canvas_h_in"
+     }
+    }
+   },
+   "description": "Пустое место сцены (дюймы), куда стиль кладёт предметы своего мира (styles/README.md). Содержанию здесь не место; без поля стиль рисует мир только по полям кадра"
+  },
+  "tracker_emph": {
+   "type": "array",
+   "minItems": 1,
+   "items": {
+    "$ref": "#/$defs/when"
+   },
+   "description": "Пульс активной плашки трекера на бите: 1 → 1 + pulse_amp → 1 за emph_dur, синус, от центра"
+  },
+  "markup": {
+   "type": "string",
+   "pattern": "^[A-Za-z0-9_.-]+\\.html$",
+   "description": "Необязательный файл своей разметки рядом с раскадровкой. Верхние элементы — class=\"el\" и id; позиции — в px; data-layer=\"under|over\" — слой; data-part=\"имя\" у вложенного узла — часть, на которую ссылается бит как «id.имя»"
+  },
+  "notes": {
+   "type": "string",
+   "description": "Для людей; сборка не читает"
+  },
+  "start_state": {
+   "$ref": "#/$defs/state"
+  },
+  "end_state": {
+   "$ref": "#/$defs/state"
+  },
+  "elements": {
+   "type": "array",
+   "items": {
+    "$ref": "#/$defs/element"
+   }
+  },
+  "beats": {
+   "type": "array",
+   "minItems": 1,
+   "items": {
+    "$ref": "#/$defs/beat"
+   }
+  }
+ },
+ "$defs": {
+  "state": {
+   "description": "Состояние на стыке: end_state сцены N == start_state N+1 (контракт стыка). В ядре — пустой объект; плагин каркаса может добавить свои поля.",
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {}
+  },
+  "when": {
+   "description": "Момент: реплика + доля её длительности + сдвиг в секундах — как у бита",
+   "type": "object",
+   "additionalProperties": false,
+   "required": [
+    "reply",
+    "at"
+   ],
+   "properties": {
+    "reply": {
+     "type": "integer",
+     "minimum": 1
+    },
+    "at": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 1
+    },
+    "offset": {
+     "type": "number",
+     "minimum": -2,
+     "maximum": 2
+    }
+   }
+  },
+  "box": {
+   "type": "object",
+   "required": [
+    "x",
+    "y",
+    "w",
+    "h"
+   ],
+   "properties": {
+    "x": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": "@canvas_w_in"
+    },
+    "y": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": "@canvas_h_in"
+    },
+    "w": {
+     "type": "number",
+     "exclusiveMinimum": 0,
+     "maximum": "@canvas_w_in"
+    },
+    "h": {
+     "type": "number",
+     "exclusiveMinimum": 0,
+     "maximum": "@canvas_h_in"
+    }
+   }
+  },
+  "fill": {
+   "enum": "@palette+null",
+   "description": "Имя роли палитры tokens.json или null — без заливки"
+  },
+  "line": {
+   "enum": "@palette+null",
+   "description": "Имя роли палитры tokens.json или null — без обводки"
+  },
+  "tone": {
+   "enum": "@tones",
+   "description": "Тон заливки, обводки и надписи: имена из tokens.json kinds.tones"
+  },
+  "text_parts": {
+   "type": "object",
+   "propertyNames": {
+    "type": "string",
+    "pattern": "^([a-z0-9-]+|\\*)$"
+   },
+   "properties": {
+    "*": {
+     "type": "array",
+     "minItems": 2,
+     "items": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$"
+     },
+     "description": "Части по порядку, покрывающие весь текст: имя с подстрокой в text_parts ищется, имя без неё забирает промежуток"
+    }
+   },
+   "additionalProperties": {
+    "type": "string",
+    "minLength": 1
+   },
+   "description": "Части-подстроки надписи: {имя: подстрока} — первое вхождение оборачивается в <span data-part> (inline-block, без класса t)"
+  },
+  "layer": {
+   "enum": [
+    "under",
+    "over"
+   ],
+   "description": "Слой внутри сцены: under — под обычными элементами (плашка-фокус, тени), over — над ними. Без поля — обычный слой"
+  },
+  "ease": {
+   "enum": [
+    "none",
+    "power1.in",
+    "power1.out",
+    "power1.inOut",
+    "power2.in",
+    "power2.out",
+    "power2.inOut",
+    "power3.in",
+    "power3.out",
+    "power3.inOut"
+   ]
+  },
+  "color": {
+   "enum": "@palette",
+   "description": "Имя роли палитры tokens.json"
+  },
+  "targets": {
+   "type": "array",
+   "minItems": 1,
+   "items": {
+    "type": "string",
+    "pattern": "^[a-z0-9-]+(\\.[a-z0-9-]+)?$"
+   },
+   "description": "id элементов этой сцены (из elements или из markup); «id.часть» — часть элемента: у step — num, text, tag; у card и plaque — icon, text; у text — text; в разметке — узел с data-part"
+  },
+  "pair": {
+   "type": "array",
+   "minItems": 2,
+   "maxItems": 2,
+   "items": {
+    "type": "number",
+    "minimum": 0,
+    "maximum": 1
+   }
+  },
+  "element": {
+   "type": "object",
+   "required": [
+    "id",
+    "kind"
+   ],
+   "properties": {
+    "id": {
+     "type": "string",
+     "pattern": "^[a-z0-9-]+$"
+    },
+    "kind": {
+     "enum": [
+      "text",
+      "step",
+      "card",
+      "plaque",
+      "icon",
+      "box",
+      "bullet",
+      "quiz"
+     ]
+    }
+   },
+   "allOf": [
+    {
+     "$ref": "#/$defs/box"
+    },
+    {
+     "if": {
+      "properties": {
+       "kind": {
+        "const": "text"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "text",
+       "size"
+      ],
+      "properties": {
+       "id": true,
+       "kind": true,
+       "x": true,
+       "y": true,
+       "w": true,
+       "h": true,
+       "layer": {
+        "$ref": "#/$defs/layer"
+       },
+       "text": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Дословно текст надписи сцены"
+       },
+       "size": {
+        "type": "number",
+        "minimum": 13.5,
+        "maximum": 200,
+        "description": "Кегль, pt"
+       },
+       "bold": {
+        "type": "boolean"
+       },
+       "color": {
+        "$ref": "#/$defs/color"
+       },
+       "align": {
+        "enum": [
+         "left",
+         "center",
+         "right"
+        ]
+       },
+       "text_parts": {
+        "$ref": "#/$defs/text_parts"
+       }
+      },
+      "additionalProperties": false
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "kind": {
+        "const": "step"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "num",
+       "text"
+      ],
+      "properties": {
+       "id": true,
+       "kind": true,
+       "x": true,
+       "y": true,
+       "w": true,
+       "h": true,
+       "layer": {
+        "$ref": "#/$defs/layer"
+       },
+       "num": {
+        "type": "integer",
+        "minimum": 1
+       },
+       "text": {
+        "type": "string",
+        "minLength": 1
+       },
+       "accent": {
+        "type": "boolean",
+        "description": "Оранжевый кружок — шаг работника"
+       },
+       "tag": {
+        "type": "string",
+        "description": "Метка справа от текста, например «ВАШ ШАГ»"
+       },
+       "tag_x": {
+        "type": "number",
+        "description": "x метки, дюймы от левого края полотна"
+       }
+      },
+      "additionalProperties": false
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "kind": {
+        "const": "card"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "text"
+      ],
+      "properties": {
+       "id": true,
+       "kind": true,
+       "x": true,
+       "y": true,
+       "w": true,
+       "h": true,
+       "layer": {
+        "$ref": "#/$defs/layer"
+       },
+       "text": {
+        "type": "string",
+        "minLength": 1
+       },
+       "icon": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]+\\.svg$",
+        "description": "Имя файла иконки: project.json paths.icons, иначе engine/video/assets/icons"
+       }
+      },
+      "additionalProperties": false
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "kind": {
+        "const": "plaque"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "text"
+      ],
+      "properties": {
+       "id": true,
+       "kind": true,
+       "x": true,
+       "y": true,
+       "w": true,
+       "h": true,
+       "layer": {
+        "$ref": "#/$defs/layer"
+       },
+       "text": {
+        "type": "string",
+        "minLength": 1
+       },
+       "icon": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]+\\.svg$"
+       },
+       "tone": {
+        "enum": [
+         "info",
+         "warn"
+        ]
+       },
+       "size": {
+        "type": "number",
+        "minimum": 13.5,
+        "maximum": 40,
+        "description": "Кегль надписи, pt (по умолчанию 20,25)"
+       }
+      },
+      "additionalProperties": false
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "kind": {
+        "const": "box"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "id": true,
+       "kind": true,
+       "x": true,
+       "y": true,
+       "w": true,
+       "h": true,
+       "layer": {
+        "$ref": "#/$defs/layer"
+       },
+       "tone": {
+        "$ref": "#/$defs/tone"
+       },
+       "fill": {
+        "$ref": "#/$defs/fill",
+        "description": "Заливка (часть fill, 100 % × 100 %); null — без заливки"
+       },
+       "line": {
+        "$ref": "#/$defs/line",
+        "description": "Обводка (часть line, прозрачная внутри); null — без обводки"
+       },
+       "line_pt": {
+        "type": "number",
+        "minimum": 0.5,
+        "maximum": 4,
+        "description": "Толщина обводки, pt (по умолчанию 1,5 у tone, иначе 1)"
+       },
+       "text": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Надпись дословно со сцены; без поля — прямоугольник без текста (линия, разделитель)"
+       },
+       "size": {
+        "type": "number",
+        "minimum": 13.5,
+        "maximum": 200
+       },
+       "bold": {
+        "type": "boolean"
+       },
+       "color": {
+        "$ref": "#/$defs/color"
+       },
+       "pad": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 2,
+        "description": "Левый отступ надписи, ″ (по умолчанию 0,29); перенос внутри w − pad − 0,25"
+       },
+       "align": {
+        "enum": [
+         "left",
+         "center",
+         "right"
+        ]
+       },
+       "valign": {
+        "enum": [
+         "top",
+         "middle",
+         "bottom"
+        ]
+       },
+       "text_parts": {
+        "$ref": "#/$defs/text_parts"
+       }
+      },
+      "dependentRequired": {
+       "text_parts": [
+        "text"
+       ],
+       "size": [
+        "text"
+       ]
+      },
+      "additionalProperties": false
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "kind": {
+        "const": "bullet"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "text"
+      ],
+      "properties": {
+       "id": true,
+       "kind": true,
+       "x": true,
+       "y": true,
+       "w": true,
+       "h": true,
+       "layer": {
+        "$ref": "#/$defs/layer"
+       },
+       "text": {
+        "type": "string",
+        "minLength": 1
+       },
+       "size": {
+        "type": "number",
+        "minimum": 13.5,
+        "maximum": 60,
+        "description": "Кегль, pt (по умолчанию 21,75)"
+       },
+       "bold": {
+        "type": "boolean"
+       },
+       "color": {
+        "$ref": "#/$defs/color"
+       },
+       "marker": {
+        "$ref": "#/$defs/color",
+        "description": "Цвет маркера (по умолчанию )"
+       },
+       "marker_size": {
+        "type": "number",
+        "minimum": 0.06,
+        "maximum": 0.2,
+        "description": "Сторона квадратного маркера, ″ (0,12 по умолчанию; 0,10 — функции сцены 16)"
+       },
+       "text_dx": {
+        "type": "number",
+        "minimum": 0.1,
+        "maximum": 1,
+        "description": "Текст от x, ″ (0,31 по умолчанию; 0,25 — сцена 16)"
+       },
+       "text_parts": {
+        "$ref": "#/$defs/text_parts"
+       }
+      },
+      "additionalProperties": false
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "kind": {
+        "const": "quiz"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "num",
+       "text",
+       "answer"
+      ],
+      "properties": {
+       "id": true,
+       "kind": true,
+       "x": true,
+       "y": true,
+       "w": true,
+       "h": true,
+       "layer": {
+        "$ref": "#/$defs/layer"
+       },
+       "num": {
+        "type": "integer",
+        "minimum": 1
+       },
+       "text": {
+        "type": "string",
+        "minLength": 1
+       },
+       "size": {
+        "type": "number",
+        "minimum": 13.5,
+        "maximum": 40,
+        "description": "Кегль текста, pt (по умолчанию 21,75)"
+       },
+       "answer": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Надпись полосы-ответа дословно"
+       },
+       "tone": {
+        "$ref": "#/$defs/tone"
+       }
+      },
+      "additionalProperties": false
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "kind": {
+        "const": "icon"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "icon"
+      ],
+      "properties": {
+       "id": true,
+       "kind": true,
+       "x": true,
+       "y": true,
+       "w": true,
+       "h": true,
+       "layer": {
+        "$ref": "#/$defs/layer"
+       },
+       "icon": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]+\\.svg$"
+       },
+       "color": {
+        "$ref": "#/$defs/color"
+       },
+       "with": {
+        "type": "string",
+        "pattern": "^[a-z0-9-]+$",
+        "description": "Спутник: id надписи этой сцены, с которой иконка едет всё время (её move, пульс, дыхание, подъём) — README «Спутники»"
+       }
+      },
+      "additionalProperties": false
+     }
+    }
+   ]
+  },
+  "beat": {
+   "description": "Действие в момент: реплика reply (номер строки озвучки этой сцены) + доля at её длительности + сдвиг offset секунд. Бит от конца предыдущей сцены — её последняя реплика с at = 1.",
+   "type": "object",
+   "required": [
+    "reply",
+    "at",
+    "action"
+   ],
+   "properties": {
+    "reply": {
+     "type": "integer",
+     "minimum": 1
+    },
+    "at": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 1
+    },
+    "offset": {
+     "type": "number",
+     "minimum": -2,
+     "maximum": 2
+    },
+    "action": {
+     "enum": [
+      "show",
+      "hide",
+      "emph",
+      "level",
+      "move"
+     ]
+    }
+   },
+   "allOf": [
+    {
+     "if": {
+      "properties": {
+       "action": {
+        "const": "show"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "targets"
+      ],
+      "properties": {
+       "reply": true,
+       "at": true,
+       "offset": true,
+       "action": true,
+       "targets": {
+        "$ref": "#/$defs/targets"
+       },
+       "anim": {
+        "enum": [
+         "rise",
+         "fade",
+         "pop",
+         "wipe",
+         "lift",
+         "cut",
+         "draw"
+        ],
+        "description": "По умолчанию rise. lift — снизу на 0,15″ за 0,30 с; cut — мгновенно; draw — штрихи иконки рисуются от начала к концу за 0,5 с (power2.out)"
+       },
+       "stagger": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 2,
+        "description": "Секунды между соседними целями"
+       },
+       "level": {
+        "$ref": "#/$defs/level",
+        "description": "До какой непрозрачности входит: 0,2 — тень, 0,45 — приглушён, 1 — чернила (по умолчанию)"
+       },
+       "dur": {
+        "type": "number",
+        "minimum": 0.1,
+        "maximum": 2.0,
+        "description": "Длительность наплыва, с; по умолчанию — своя у anim"
+       }
+      },
+      "additionalProperties": false
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "action": {
+        "const": "hide"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "targets"
+      ],
+      "properties": {
+       "reply": true,
+       "at": true,
+       "offset": true,
+       "action": true,
+       "targets": {
+        "$ref": "#/$defs/targets"
+       },
+       "anim": {
+        "enum": [
+         "fade",
+         "lift",
+         "cut"
+        ],
+        "description": "По умолчанию fade (0,4 с). lift — вверх на 0,15″ и гаснет, 0,30 с power2.in; cut — мгновенно (подмена кадр-в-кадр)"
+       },
+       "stagger": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 2
+       },
+       "dur": {
+        "type": "number",
+        "minimum": 0.1,
+        "maximum": 2.0,
+        "description": "Длительность наплыва, с; по умолчанию — своя у anim"
+       }
+      },
+      "additionalProperties": false
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "action": {
+        "const": "emph"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "targets"
+      ],
+      "properties": {
+       "reply": true,
+       "at": true,
+       "offset": true,
+       "action": true,
+       "targets": {
+        "$ref": "#/$defs/targets"
+       },
+       "stagger": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 2
+       },
+       "style": {
+        "enum": [
+         "pulse",
+         "ring",
+         "breathe",
+         "spin",
+         "flip",
+         "flash"
+        ],
+        "description": "flip — разворот вокруг вертикальной оси: до бита элемент зеркален, за dur поворачивается и смотрит прямо (power2.inOut, перспектива), только иконки; spin — один оборот 0 → 360° вокруг центра, power2.inOut, только иконки; pulse — масштаб от центра (по умолчанию); ring — звон: поворот вокруг верхней точки −14°, +11°, −7°, +3°, 0°; breathe — элемент в фокусе дышит масштабом (период 2,4 с, вход и выход 0,4 с) от бита до until"
+       },
+       "amp": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "maximum": 30,
+        "description": "pulse — доля роста (по умолчанию 0,04, не больше 0,10); ring — градусы первого качания (по умолчанию 14); breathe — доля роста (по умолчанию 0,015, не больше 0,02)"
+       },
+       "dur": {
+        "type": "number",
+        "minimum": 0.3,
+        "maximum": 2,
+        "description": "Секунды, по умолчанию 0,8 (у breathe не пишется: длина — до until)"
+       },
+       "until": {
+        "$ref": "#/$defs/when",
+        "description": "Только breathe: когда фокус уходит — дыхание гаснет за 0,4 с"
+       },
+       "dir": {
+        "enum": [
+         1,
+         -1
+        ],
+        "description": "Только spin: 1 — по часовой (по умолчанию), −1 — против"
+       },
+       "color": {
+        "$ref": "#/$defs/color",
+        "description": "Только flash: цвет вспышки (палитра)"
+       }
+      },
+      "allOf": [
+       {
+        "if": {
+         "required": [
+          "style"
+         ],
+         "properties": {
+          "style": {
+           "const": "ring"
+          }
+         }
+        },
+        "then": {
+         "properties": {
+          "amp": {
+           "minimum": 2
+          }
+         }
+        },
+        "else": {
+         "properties": {
+          "amp": {
+           "maximum": 0.1
+          }
+         }
+        }
+       },
+       {
+        "if": {
+         "required": [
+          "style"
+         ],
+         "properties": {
+          "style": {
+           "const": "breathe"
+          }
+         }
+        },
+        "then": {
+         "required": [
+          "until"
+         ],
+         "properties": {
+          "amp": {
+           "maximum": 0.02
+          },
+          "dur": false
+         }
+        },
+        "else": {
+         "properties": {
+          "until": false
+         }
+        }
+       },
+       {
+        "if": {
+         "required": [
+          "style"
+         ],
+         "properties": {
+          "style": {
+           "const": "flip"
+          }
+         }
+        },
+        "then": {
+         "properties": {
+          "amp": false
+         }
+        }
+       },
+       {
+        "if": {
+         "required": [
+          "style"
+         ],
+         "properties": {
+          "style": {
+           "const": "spin"
+          }
+         }
+        },
+        "then": {
+         "properties": {
+          "amp": false
+         }
+        },
+        "else": {
+         "properties": {
+          "dir": false
+         }
+        }
+       },
+       {
+        "if": {
+         "required": [
+          "style"
+         ],
+         "properties": {
+          "style": {
+           "const": "flash"
+          }
+         }
+        },
+        "then": {
+         "required": [
+          "color"
+         ],
+         "properties": {
+          "amp": false
+         }
+        },
+        "else": {
+         "properties": {
+          "color": false
+         }
+        }
+       }
+      ],
+      "additionalProperties": false
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "action": {
+        "const": "level"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "targets",
+       "value"
+      ],
+      "properties": {
+       "reply": true,
+       "at": true,
+       "offset": true,
+       "action": true,
+       "targets": {
+        "$ref": "#/$defs/targets"
+       },
+       "stagger": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 2
+       },
+       "value": {
+        "$ref": "#/$defs/level",
+        "description": "0,2 — тень, 0,45 — приглушён (прожектор), 1 — чернила"
+       },
+       "dur": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 2,
+        "description": "По умолчанию 0,35 с power1.out для тень → чернила, иначе 0,5 с power1.inOut"
+       },
+       "ease": {
+        "$ref": "#/$defs/ease"
+       }
+      },
+      "additionalProperties": false
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "action": {
+        "const": "move"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "targets"
+      ],
+      "properties": {
+       "reply": true,
+       "at": true,
+       "offset": true,
+       "action": true,
+       "targets": {
+        "$ref": "#/$defs/targets"
+       },
+       "stagger": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 2
+       },
+       "to": {
+        "$ref": "#/$defs/box",
+        "description": "Куда: рамка в дюймах"
+       },
+       "to_el": {
+        "type": "string",
+        "pattern": "^([a-z0-9-]+:)?[a-z0-9-]+$",
+        "description": "Куда: рамка элемента (id этой сцены или «сцена:id» другой сцены фильма)"
+       },
+       "to_text": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+         "el",
+         "sub"
+        ],
+        "properties": {
+         "el": {
+          "type": "string",
+          "pattern": "^([a-z0-9-]+:)?[a-z0-9-]+$"
+         },
+         "sub": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Подстрока текста элемента el; рамка промеряется в DOM"
+         },
+         "nth": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Какое вхождение, по умолчанию 1"
+         }
+        },
+        "description": "Куда: рамка подстроки надписи"
+       },
+       "fit": {
+        "enum": [
+         "text",
+         "box",
+         "none"
+        ],
+        "description": "text — текст к тексту: равномерный масштаб по высоте строки (или size), буквы ложатся на буквы (по умолчанию для to_text); box — растянуть рамку в рамку (по умолчанию для to и to_el); none — размер не менять"
+       },
+       "anchor": {
+        "$ref": "#/$defs/pair",
+        "description": "Точка цели [доля x, доля y]; по умолчанию [0,0], при fit none — [0.5,0.5]"
+       },
+       "self": {
+        "$ref": "#/$defs/pair",
+        "description": "Точка самого элемента, которая встаёт в anchor; по умолчанию = anchor"
+       },
+       "dx": {
+        "type": "number",
+        "minimum": -20,
+        "maximum": 20,
+        "description": "Сдвиг точки цели, дюймы"
+       },
+       "dy": {
+        "type": "number",
+        "minimum": -11.25,
+        "maximum": 11.25
+       },
+       "size": {
+        "type": "number",
+        "minimum": 13.5,
+        "maximum": 200,
+        "description": "Только fit text: конечный кегль, pt (иначе — кегль цели)"
+       },
+       "color": {
+        "$ref": "#/$defs/color",
+        "description": "Конечный цвет текста — тем же твином"
+       },
+       "dur": {
+        "type": "number",
+        "minimum": 0.1,
+        "maximum": 3,
+        "description": "Секунды, по умолчанию 0,7"
+       },
+       "ease": {
+        "$ref": "#/$defs/ease",
+        "description": "По умолчанию power2.inOut; морф моста — power3.inOut"
+       },
+       "pad": {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 4,
+        "items": {
+         "type": "number",
+         "minimum": -2,
+         "maximum": 2
+        },
+        "oneOf": [
+         {
+          "minItems": 2,
+          "maxItems": 2
+         },
+         {
+          "minItems": 4,
+          "maxItems": 4
+         }
+        ],
+        "description": "Поля вокруг цели, ″: [x, y] или [слева, сверху, справа, снизу] — раздвигают рамку цели до fit (плашка-фокус по промеру строки)"
+       },
+       "tilt": {
+        "type": "number",
+        "minimum": -20,
+        "maximum": 20,
+        "description": "Наклон в полёте, градусы (+ — по часовой): к середине пути — tilt, к посадке — 0; вокруг центра. Для иконок и плашек, надписи не наклоняются"
+       }
+      },
+      "oneOf": [
+       {
+        "required": [
+         "to"
+        ]
+       },
+       {
+        "required": [
+         "to_el"
+        ]
+       },
+       {
+        "required": [
+         "to_text"
+        ]
+       }
+      ],
+      "additionalProperties": false
+     }
+    }
+   ]
+  },
+  "level": {
+   "enum": "@levels",
+   "description": "Уровень непрозрачности: тень, приглушён, чернила (tokens.json motion)"
+  },
+  "chapter": {
+   "enum": "@chapters",
+   "description": "id главы из project.json chapters"
+  },
+  "chapter_or_null": {
+   "enum": "@chapters+null",
+   "description": "id главы из project.json chapters или null"
+  }
+ }
+}

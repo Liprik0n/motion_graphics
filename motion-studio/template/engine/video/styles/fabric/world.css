@@ -1,0 +1,4 @@
+/* Ткань, режим «мир» (не кладётся при project.json style_brand_lock: true).
+   Заголовок — плотным шрифтом нашивки (--sty-fabric-title объявляет сборка из style.json fonts); цвет — роль бренда.
+   Нашивку под ним рисует plugin.js по рамке строки. */
+#root[data-style="fabric"] .fr-title { font-family: var(--sty-fabric-title); font-size: 40px; letter-spacing: 0.5px; padding-left: 22px; }

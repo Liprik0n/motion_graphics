@@ -1,0 +1,10 @@
+{
+ "title": "Проба наборов стилей: мир сцены рисует набор",
+ "scenes": ["kit-probe"],
+ "styles": ["none", "flat-edu", "pixel", "comic", "paper-cut", "neon-line", "tv-splash"],
+ "replies": [
+  {"n": 1, "scene": "kit-probe", "voice": "a", "emotion": "Happy", "file": "demo-audio/130.mp3"},
+  {"n": 2, "scene": "kit-probe", "voice": "b", "emotion": "Neutral", "file": "demo-audio/131.mp3"}
+ ],
+ "_comment": "Проба миров с набором сцены (engine/video/styles/README.md): build.py kits собирает сцену kit-probe в каждом стиле списка styles — <out>/kits/<стиль>/ — и кладёт <out>/kits/styles-sheet.png. Сцена подключена к набору каждого стиля (ComicKit, PixelKit, PaperKit, FlatEdu, NeonKit, TvSplash) и рисует им свой мир; none — бренд без стиля. Здесь же образец героя с размеченными конечностями (условие V25 «поза»). Проверка: check.py kits --page (все проходы) или check.py kits/<стиль> --page."
+}

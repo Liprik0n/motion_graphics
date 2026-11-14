@@ -1,0 +1,41 @@
+{
+ "name": "fabric",
+ "label": "Ткань",
+ "description": "Мир шитья: джинсовое полотно с саржевым рубчиком и строчкой по краю кадра; на нём пришит светлый льняной лоскут со строчкой — в нём каркас и содержание; заголовок — на фетровой нашивке с красным кантом и стежками (шрифт Segoe UI Black); по верхнему полю — фетровое солнце с лицом и лучами-треугольниками, фетровые облака, вышитый самолётик со стежковым следом; вязаная зелёная трава внизу; в зонах сцены — облако, самолётик, пуговица, дерево, сердечко-заплатка, катушка ниток. Строчки «прошиваются» на входе сцены, фетр двигается «на двойках» с мягким перелётом.",
+ "use_for": "редко, обоснуй: тёплая подача для новичков, адаптация, забота о людях; не для запретов и инцидентов (catalog/styles.md)",
+ "decor": {
+  "denim": "#2F4C7E", "denim_light": "#4A6BA3", "denim_dark": "#1F355C", "thread": "#F2C14E",
+  "linen": "#F3ECDD", "felt_cream": "#FFF8EA", "felt_red": "#D2453A", "felt_sun": "#F6C445", "felt_ray": "#EE9B2F",
+  "felt_white": "#FFFFFF", "felt_green": "#5DA34A", "felt_green_dark": "#3D7A33", "felt_brown": "#8A5A36",
+  "felt_pink": "#E7798A", "button": "#C9893F", "stitch": "#B23A30", "shade": "#2A2A2A"
+ },
+ "fonts": {
+  "title": {"family": "Segoe UI Black", "files": ["seguibl.ttf", "ariblk.ttf"], "weight": 900,
+            "note": "плотный гротеск нашивки, системный Windows (кириллица проверяется сборкой); нет файла — заголовок фирменным"}
+ },
+ "objects": ["sun", "cloud", "plane", "button", "tree", "heart", "spool", "title-patch", "knit", "seams"],
+ "params": {
+  "win_pad_px": 14,
+  "window_in": [0.42, 1.92, 19.16, 9.06], "window_radius_px": 22,
+  "seam_inset_px": 12, "seam_dash": "14 9", "seam_width": 3, "edge_inset_px": 12,
+  "sew_from": 0.1, "sew_in": 1.2,
+  "patch_pad": [20, 7], "patch_rim_px": 5,
+  "grain_alpha": 0.14, "grain_seed": 23,
+  "sun_turn_deg_sec": 8, "sway_px": 6, "pop_sec": 0.45, "enter_from": 0.3, "enter_gap": 0.2,
+  "lock_stitch_role": "accent", "lock_weave_alpha": 0.05,
+  "outline": [".k-card", ".k-plaque"], "outline_gap_px": 7,
+  "step_frames": 2
+ },
+ "motion": {"icon_step_frames": 2, "icon_overshoot": 0.8, "step_frames": 2, "overshoot": 0.5},
+ "sfx": {
+  "_comment": "материал звука: мягкое насыщение (wave soft), шорох ткани (grit) и глухой верх (lp_hz) — как удар по подушке",
+  "clips": {
+   "whoosh_click": {"wave": "soft", "grit": 0.45, "lp_hz": 2600},
+   "ping": {"wave": "soft", "lp_hz": 3200, "grit": 0.15},
+   "tick": {"wave": "soft", "grit": 0.4, "lp_hz": 2400},
+   "click": {"wave": "soft", "grit": 0.35, "lp_hz": 2400},
+   "thump": {"wave": "soft", "grit": 0.3, "lp_hz": 1800}
+  }
+ },
+ "never": ["фетр и строчки под текстом: только поля кадра и decor_zones", "ткань в сценах о нарушениях и сроках — тон слишком мягкий", "толстый шрифт нашивки в основном тексте — только заголовок"]
+}

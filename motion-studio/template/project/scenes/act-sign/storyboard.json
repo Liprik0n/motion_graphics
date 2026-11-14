@@ -1,0 +1,15 @@
+{
+ "scene": "act-sign",
+ "title": "Вывески",
+ "frame": false,
+ "markup": "markup.html",
+ "notes": "Фикстура движка (films/acts.json и acts-hide.json, порчи checks/red_acts.py). Сцена без каркаса после сцены с каркасом. Яркая вывеска head и тусклая sign-dim (уровень 0,2): тусклая исключена из правила «в итоге сцены всё на 1,0» по имени (project.json legibility_except), взамен V35 — не выше 0,3 и видна не меньше 2 с. head и when — то, что вариант acts-hide скрывает ключом фильма hide.",
+ "start_state": {},
+ "end_state": {},
+ "beats": [
+  {"reply": 3, "at": 0, "offset": -1.55, "action": "show", "targets": ["head"], "anim": "fade"},
+  {"reply": 3, "at": 0.1, "action": "show", "targets": ["sign-dim"], "anim": "fade", "level": 0.2},
+  {"reply": 4, "at": 0.1, "action": "show", "targets": ["when"], "anim": "fade"},
+  {"reply": 4, "at": 0.5, "action": "show", "targets": ["site"], "anim": "fade"}
+ ]
+}

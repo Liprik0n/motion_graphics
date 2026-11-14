@@ -1,0 +1,42 @@
+{
+ "name": "clay",
+ "label": "Глина",
+ "description": "Мир пластилиновой мультипликации: тёплый кремовый стол с мягкой виньеткой и следами пальцев; в зонах сцены — объёмные мягкие формы без 3D (радиальные градиенты, блик и падающая тень): зелёные холмы-купола, деревья-шарики на палочках, пластилиновый самолётик, белые облака-колбаски, галька и морские волны-«тильды». Заголовок — разноцветными пластилиновыми буквами (кодом: Rubik Bold с градиентом, тёмной кромкой и тенью). Движение покадровое «на двойках» с дрожью формы (jitter) и мягким отскоком, предметы дышат — сжимаются и вытягиваются.",
+ "use_for": "редко, обоснуй: детская или очень мягкая подача, вводный ролик, «как это устроено» простыми формами; не для регламентов и инцидентов (catalog/styles.md)",
+ "decor": {
+  "table": "#EFE6D6", "table_edge": "#D9CCB5", "shadow": "#5A4632",
+  "green": "#6DB55A", "green_dark": "#3F7F35", "green_light": "#A6DB8F",
+  "brown": "#9A6A42", "brown_dark": "#6B4529",
+  "orange": "#EE8A3C", "orange_dark": "#B85A1E", "orange_light": "#FFC08A",
+  "white": "#FBF8F2", "white_shade": "#D8D2C6",
+  "blue": "#4F86C6", "blue_dark": "#2F5E99", "purple": "#8E5BB5", "purple_dark": "#5E3A80",
+  "red": "#D9534F", "red_dark": "#9E302C", "yellow": "#F2C14E", "yellow_dark": "#B88A1E",
+  "pebble": "#C98B5A", "pebble_dark": "#8F5A33", "wave": "#6E6A62"
+ },
+ "fonts": {
+  "title": {"kind": "code", "note": "заголовок рисует plugin.js пластилиновыми буквами: шрифт декора (Rubik Bold) с градиентом своего цвета на каждую букву, тёмной кромкой и тенью — цвет текста каркаса в мире не трогается"},
+  "decor": {"family": "Rubik", "files": ["Rubik-Bold.ttf", "seguibl.ttf", "ariblk.ttf"], "weight": 700}
+ },
+ "objects": ["hill", "tree", "plane", "cloud", "pebbles", "waves", "fingerprints"],
+ "params": {
+  "win_pad_px": 14,
+  "title_size_px": 50, "title_colors": ["orange", "green", "blue", "purple", "red", "yellow"],
+  "vignette": 0.22, "vignette_inner": 55,
+  "print_count": 7, "print_alpha": 0.05, "print_seed": 41,
+  "breathe": 0.035, "breathe_hz": 0.7, "jitter_px": 1.2, "pop_sec": 0.5, "enter_from": 0.25, "enter_gap": 0.2,
+  "lock_shadow_role": "ink",
+  "step_frames": 2
+ },
+ "motion": {"icon_step_frames": 2, "icon_overshoot": 1.4, "step_frames": 2, "overshoot": 1.0, "jitter_px": 1.0},
+ "sfx": {
+  "_comment": "материал звука: мягкий, вязкий — насыщение без звона (wave soft), сильный срез верха (lp_hz), чуть шороха (grit)",
+  "clips": {
+   "whoosh_click": {"wave": "soft", "lp_hz": 1800, "grit": 0.2},
+   "ping": {"wave": "soft", "lp_hz": 2200},
+   "tick": {"wave": "soft", "lp_hz": 1600, "grit": 0.15},
+   "click": {"wave": "soft", "lp_hz": 1600, "grit": 0.2},
+   "thump": {"wave": "soft", "lp_hz": 1200, "grit": 0.25}
+  }
+ },
+ "never": ["разноцветные буквы в основном тексте — только заголовок", "глина в сценах о сроках, запретах и нарушениях — тон игрушечный", "дрожь и отскок на тексте речи"]
+}

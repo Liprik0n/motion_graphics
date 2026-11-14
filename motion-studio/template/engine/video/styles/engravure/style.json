@@ -1,0 +1,37 @@
+{
+ "name": "engravure",
+ "label": "Гравюра",
+ "description": "Мир старой гравюры: пергаментный лист в двойной рамке с угольниками, тонкая штриховка резцом; заголовок — антиквой на ленте-картуше с раздвоенными концами; в зонах сцены — маяк с лучом, парусник на волнах из параллельных линий, солнце с лучами-штрихами, роза ветров, чайки, гусиное перо. Карточки отбрасывают тень перекрёстной штриховкой. Линии прорезаются по одной, без отскоков.",
+ "use_for": "официальное: приказ, регламент, подпись руководителя, «закон» — картуш как заголовок документа (catalog/styles.md)",
+ "decor": {
+  "parchment": "#F1EBDC", "ribbon": "#FBF7EC", "etch": "#3A3128", "etch_soft": "#7D6F5C", "sea": "#DCD3BE",
+  "lamp": "#E9C46A", "rust": "#A8553A"
+ },
+ "fonts": {
+  "title": {"family": "Linux Libertine G", "files": ["LinLibertine_RB_G.ttf", "palab.ttf", "georgiab.ttf"], "weight": 700,
+            "note": "антиква, системный файл (кириллица проверяется сборкой); нет файла — заголовок фирменным"},
+  "decor": {"family": "Linux Libertine G Italic", "files": ["LinLibertine_RI_G.ttf", "palai.ttf", "georgiai.ttf"], "weight": 400}
+ },
+ "objects": ["lighthouse", "ship", "sun", "compass", "birds", "quill", "cartouche", "waves", "frame"],
+ "params": {
+  "win_pad_px": 14,
+  "frame_inset_px": [16, 24], "corner_px": 46,
+  "line_w": 1.6, "hatch_gap_px": 4, "cross_gap_px": 6, "hatch_alpha": 0.55, "shadow_px": [10, 10],
+  "outline": [".k-card", ".k-plaque", ".k-box", ".k-quiz"],
+  "ribbon_pad_px": 34, "ribbon_tail_px": 54, "ribbon_drop_px": 12,
+  "waves_top_in": 7.75, "waves_rows": 9,
+  "draw_in": 1.1, "draw_gap": 0.28, "draw_from": 0.2,
+  "beam_sweep_sec": 6, "sun_turn_sec": 90, "ship_bob_px": 4,
+  "lock_role": "ink", "lock_alpha": 0.35
+ },
+ "motion": {"icon_step_frames": 1, "icon_overshoot": 0, "step_frames": 1, "overshoot": 0},
+ "sfx": {
+  "_comment": "материал звука: резец по меди и печатный пресс — шорох (grit), короткий удар оттиска (noise_burst), глухой верх",
+  "clips": {
+   "whoosh_click": {"lp_hz": 3000, "grit": 0.3, "noise_burst": 0.25},
+   "ping": {"lp_hz": 4200, "grit": 0.12},
+   "tick": {"lp_hz": 3400, "grit": 0.3, "noise_burst": 0.15}
+  }
+ },
+ "never": ["штриховка под строкой текста", "антиква в основном тексте — только заголовок на картуше", "отскоки и кипение — гравюра движется ровно"]
+}

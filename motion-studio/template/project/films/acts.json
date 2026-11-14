@@ -1,0 +1,12 @@
+{
+ "title": "Фикстура: часы, действия мира и камера, немая строка, тусклая вывеска",
+ "scenes": ["act-stage", "act-sign"],
+ "timeline_offset_sec": 0.0,
+ "replies": [
+  {"n": 1, "scene": "act-stage", "voice": "a", "emotion": "Happy", "file": "demo-audio/130.mp3"},
+  {"n": 901, "scene": "act-stage", "voice": "a", "ms": 1500, "silent": true, "what": "немая строка: удар крышки"},
+  {"n": 3, "scene": "act-sign", "voice": "a", "emotion": "Fluent", "file": "demo-audio/142.mp3"},
+  {"n": 4, "scene": "act-sign", "voice": "b", "emotion": "Neutral", "file": "demo-audio/145.mp3"}
+ ],
+ "_comment": "Приёмочный фильм возможностей движка (engine/video/plugins/README.md): act-stage (с каркасом) — часы plugins.clock (V30), метки plugins.act с исполнителями в разметке (V31), камера cam · move между положениями разметки и толчок кадра (V32), роль шрифта проекта digits (V11); act-sign (без каркаса) — стык сцены с каркасом и без (V26), тусклая вывеска sign-dim, исключение по имени (project.json legibility_except, V35), сторож текста (V34). Строка 901 — немая (silent): звука нет, длина — ms, рот закрыт (V2). Вариант с ключом hide — films/acts-hide.json. Порчи и образцы — engine/video/checks/red_acts.py."
+}

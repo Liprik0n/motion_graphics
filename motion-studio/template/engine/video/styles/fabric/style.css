@@ -1,0 +1,4 @@
+/* Ткань: CSS только привязанный к стилю (.scene[data-style="fabric"], #root[data-style="fabric"]).
+   Годится и под замком бренда: карточка и плашка — мягкий лоскут, скруглены и отбрасывают тень вниз. */
+.scene[data-style="fabric"] .k-card,
+.scene[data-style="fabric"] .k-plaque { border-radius: 14px; box-shadow: 0 4px 0 rgba(26, 28, 30, 0.18), 0 8px 14px rgba(26, 28, 30, 0.12); }

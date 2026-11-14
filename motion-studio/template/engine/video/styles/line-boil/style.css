@@ -1,0 +1,5 @@
+/* Лайн-бойл: CSS только привязанный к стилю. Палитру и шрифт текста не трогать (V22).
+   Иконки кипят вместе с рисунком: фильтр #lb-boil создаёт plugin.js (сид — рисунок «на двойках»). */
+.scene[data-style="line-boil"] .k-icon svg,
+.scene[data-style="line-boil"] .ico svg { filter: url(#lb-boil); }
+#root[data-style="line-boil"] .fr-line { opacity: 0.5; }

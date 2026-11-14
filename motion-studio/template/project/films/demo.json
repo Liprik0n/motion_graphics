@@ -1,0 +1,11 @@
+{
+ "title": "Демо шаблона: две сцены со швом",
+ "scenes": ["demo-a", "demo-b"],
+ "replies": [
+  {"n": 1, "scene": "demo-a", "voice": "a", "emotion": "Happy", "file": "demo-audio/130.mp3"},
+  {"n": 2, "scene": "demo-a", "voice": "b", "emotion": "Neutral", "file": "demo-audio/131.mp3"},
+  {"n": 3, "scene": "demo-b", "voice": "a", "emotion": "Fluent", "file": "demo-audio/142.mp3"},
+  {"n": 4, "scene": "demo-b", "voice": "b", "emotion": "Neutral", "file": "demo-audio/145.mp3"}
+ ],
+ "_comment": "Приёмочный тест ядра: 4 реплики (готовые mp3 прошлого ролика в demo-audio/ — без оплаты синтеза), две сцены и шов-мост. replies — строки озвучки прямо в фильме; проект с конвейером озвучки пишет вместо них \"manifest\": \"<путь от корня проекта>\". voice — id голоса (project.json voice_bars, voices.json)."
+}

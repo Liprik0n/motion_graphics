@@ -1,0 +1,5 @@
+/* Бумага-вырезка: CSS только привязанный к стилю. Палитру и шрифт текста не трогать (V22).
+   Фактура, годная и под замком бренда: карточки и плашки лежат листом на листе — мягкая тень вниз-вправо. */
+.scene[data-style="paper-cut"] .k-card,
+.scene[data-style="paper-cut"] .k-plaque,
+.scene[data-style="paper-cut"] .k-box { box-shadow: 5px 7px 6px rgba(26, 28, 30, 0.22); }

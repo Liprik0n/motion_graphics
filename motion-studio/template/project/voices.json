@@ -1,0 +1,32 @@
+{
+ "_comment": "Голоса проекта — единственное место для скорости, питча, карты эмоций, ставок хронометража и поправки громкости. Значения voice_id здесь не хранятся: только ИМЯ переменной .env (voice_env). Скорость и питч входят в ключ кэша — их правка оплачивает весь прогон заново, поэтому меняются только словом пользователя. Ставки и окантовка (sec_per_char, clip_pad_sec) — замер прошлого ролика по 183 оплаченным клипам: в новом проекте перемерить после полного прогона. gain_db — поправка в точке сведения, а не перегенерацией (в прошлом ролике голоса разошлись на 2,1 дБ). Его читают и сведение видео, и музыка: engine/tts/voice_gain.py.",
+ "provider": "minimax",
+ "provider_env": {"api_key": "MINIMAX_API_KEY"},
+ "model": "speech-2.8-hd",
+ "language": "Russian",
+ "audio_setting": {"sample_rate": 44100, "bitrate": 128000, "format": "mp3", "channel": 1},
+ "voices": {
+  "a": {
+   "label": "Ведущая — живая, тёплая, задаёт вопросы",
+   "voice_env": "MINIMAX_VOICE_A",
+   "speed": 1.1,
+   "pitch": 0,
+   "emotion_map": {"Neutral": "calm", "Fluent": "fluent", "Happy": "happy", "Surprised": "surprised"},
+   "sec_per_char": 0.0635,
+   "sec_per_char_net": 0.0575,
+   "clip_pad_sec": 0.36,
+   "gain_db": 0.0
+  },
+  "b": {
+   "label": "Ведущий — спокойный, низкий, объясняет",
+   "voice_env": "MINIMAX_VOICE_B",
+   "speed": 1.2,
+   "pitch": 0,
+   "emotion_map": {"Neutral": "calm", "Fluent": "fluent", "Happy": "happy", "Surprised": "surprised"},
+   "sec_per_char": 0.0620,
+   "sec_per_char_net": 0.0563,
+   "clip_pad_sec": 0.57,
+   "gain_db": 2.1
+  }
+ }
+}

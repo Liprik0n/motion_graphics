@@ -1,0 +1,92 @@
+/* Полотно ролика: координаты элементов приходят из раскадровки в дюймах и пересчитываются
+   сборкой в px; здесь — только оформление. Цвета, кегли и шрифты — CSS-переменные, которые
+   сборка пишет из tokens.json (--c-<роль>, --t-<роль>-size|weight|family, --k-<вид>-<поле>):
+   смена цвета в tokens.json меняет страницу без правки этого файла. */
+
+html, body { margin: 0; padding: 0; background: var(--c-paper); }
+#root {
+  position: relative; overflow: hidden;
+  background: var(--c-paper); font-family: var(--font-brand); color: var(--c-text);
+  -webkit-font-smoothing: antialiased;
+  /* Синтетический жирный выключен: у шрифта с одним начертанием браузер дорисовывает толщину,
+     текст тяжелее и шире эталона и вылезает из фигур. Настоящий жирный — своим файлом в tokens.json fonts. */
+  font-synthesis: none;
+}
+.layer { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+/* слои стиля (lib/stage.js addLayer): back — под каркасом и содержанием, over — над содержанием (z 10:
+   выше z-index элементов .el). Сквозь них не кликают и не промеряют: probe_dom смотрит только .el и .fr */
+.style-layer { pointer-events: none; overflow: hidden; }
+.style-over { z-index: 10; }
+
+/* ---------- каркас ---------- */
+.fr { position: absolute; box-sizing: border-box; }
+.fr-line { background: var(--k-frame-line); }
+.fr-title { font-size: var(--t-title-size); font-weight: var(--t-title-weight); color: var(--k-frame-title);
+            line-height: 1.1; white-space: nowrap; display: flex; align-items: center; }
+.fr-footer { font-size: var(--t-footer-size); font-weight: var(--t-footer-weight); color: var(--k-frame-footer);
+             line-height: 1.2; display: flex; align-items: center; }
+.fr-num { font-size: var(--t-number-size); font-weight: var(--t-number-weight); color: var(--k-frame-number);
+          text-align: right; display: flex; align-items: center; justify-content: flex-end; }
+/* голос: полоски громкости и подпись голоса; цвета пишет рантайм (lib/stage.js renderVoice) */
+.fr-voice { display: flex; align-items: center; gap: 8px; color: var(--k-voice-mute); }
+.fr-voice .vo-bars { position: relative; flex: 0 0 auto; margin-top: 2px; }
+.fr-voice .vo-bar { position: absolute; bottom: 0; height: 4.8px; background: currentColor; }
+.fr-voice .vo-name { font-size: var(--t-voice-size); font-weight: var(--t-voice-weight); line-height: 1.2;
+                     text-transform: uppercase; white-space: nowrap; color: var(--k-voice-mute); }
+/* трекер глав: плашки и заливка активной; заливка едет между плашками (lib/stage.js renderTracker) */
+.tr-plq { border: 1.33px solid var(--k-frame-tracker-line); display: flex; align-items: center; justify-content: center;
+          font-size: var(--t-tracker-size); font-weight: var(--t-tracker-weight); color: var(--k-frame-tracker);
+          text-transform: uppercase; }
+.tr-on { position: absolute; inset: -1.33px; background: var(--k-frame-tracker-fill); color: var(--k-frame-tracker-on);
+         font-weight: 700; display: flex; align-items: center; justify-content: center; opacity: 0; }
+
+/* ---------- элементы содержания (виды из раскадровки) ---------- */
+/* will-change НЕ ставить: с ним Chrome не перерастрирует слой после дробного сдвига подъёма,
+   и у нижнего края карточки остаётся полупрозрачная полоса 1 px (замер на прошлом ролике). */
+.el { position: absolute; box-sizing: border-box; opacity: 0; }
+.el .t { display: block; }
+.el { z-index: 2; }
+.el[data-layer="under"] { z-index: 1; }
+.el[data-layer="over"] { z-index: 3; }
+/* камера сцены (plugins/act.js): три вложенные обёртки во всё полотно — сюжетное движение, парение, толчок
+   (закон 4). Содержание сцены внутри, картинка-кадр (start-image) снаружи: камера её не двигает. Положения
+   камеры в разметке — узлы .cam-pos (рамка мира, которую камера растягивает на кадр), в кадре не видны. */
+.cam, .cam-float, .cam-shake { position: absolute; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 0 0; }
+.cam { z-index: 2; }
+.cam-pos { display: none; }
+.k-text { line-height: 1.15; }
+.k-step .step-num { position: absolute; left: 0; top: 0; width: 59.5px; height: 59.5px; border-radius: 50%;
+  background: var(--k-step-num_fill); color: var(--k-step-num_color);
+  font-size: var(--t-step_num-size); font-weight: var(--t-step_num-weight);
+  display: flex; align-items: center; justify-content: center; }
+.k-step.accent .step-num { background: var(--k-step-num_fill_accent); }
+.k-step .step-text { position: absolute; left: 81.6px; top: 5.8px; font-size: var(--t-step-size); color: var(--k-step-text_color);
+  font-weight: var(--t-step-weight); line-height: 1.15; white-space: normal; }
+.k-step .step-tag { position: absolute; top: 12px; font-size: var(--t-step_tag-size); font-weight: var(--t-step_tag-weight);
+  color: var(--k-step-tag_color); text-transform: uppercase; white-space: nowrap; }
+.k-card { background: var(--k-card-fill); color: var(--k-card-color); display: flex; align-items: center; }
+.k-card .ico { flex: 0 0 auto; width: 61px; height: 61px; margin: 0 17px 0 28px; color: var(--k-card-color); }
+.k-card .t { font-size: var(--t-card-size); font-weight: var(--t-card-weight); line-height: 1.15; padding-right: 28px; }
+.k-plaque { background: var(--k-plaque-fill); display: flex; align-items: center; }
+.k-plaque.warn { background: var(--k-plaque-fill_warn); }
+.k-plaque .ico { flex: 0 0 auto; width: 42px; height: 42px; margin: 0 18px 0 22px; color: var(--k-plaque-icon); }
+.k-plaque.warn .ico { color: var(--k-plaque-icon_warn); }
+.k-plaque .t { font-size: var(--t-plaque-size); font-weight: var(--t-plaque-weight); line-height: 1.2;
+  color: var(--k-plaque-color); padding-right: 24px; }
+.k-icon { color: var(--k-icon_color); }
+/* box: заливка, обводка и надпись — отдельные части (мост двигает заливку отдельно от букв) */
+.k-box .bx-fill, .k-box .bx-line { position: absolute; left: 0; top: 0; width: 100%; height: 100%; box-sizing: border-box; }
+.k-box .bx-body { position: absolute; top: 0; height: 100%; display: flex; flex-direction: column; }
+.k-box .t, .k-bullet .t, .k-quiz .t { line-height: 1.2; white-space: normal; }
+/* часть-подстрока (text_parts): inline-block — у строчного span трансформация не работает */
+.ip { display: inline-block; }
+.k-bullet .bl-marker { position: absolute; left: 0; }
+.k-bullet .t { position: absolute; top: 0; }
+.k-quiz { background: var(--k-quiz-fill); box-shadow: inset 0 0 0 1.33px var(--k-quiz-line); }
+.k-quiz .qz-num { position: absolute; border-radius: 50%; background: var(--k-quiz-num_fill); color: var(--k-quiz-num_color);
+  font-size: var(--t-quiz_num-size); font-weight: var(--t-quiz_num-weight); display: flex; align-items: center;
+  justify-content: center; line-height: 1; }
+.k-quiz .qz-text { position: absolute; color: var(--k-quiz-color); }
+.k-quiz .qz-answer { position: absolute; left: 0; width: 100%; display: flex; align-items: center; }
+.k-quiz .qz-answer .t { font-size: var(--t-quiz_answer-size); font-weight: var(--t-quiz_answer-weight); }
+.ico svg, .k-icon svg { width: 100%; height: 100%; display: block; }

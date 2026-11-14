@@ -1,0 +1,41 @@
+{
+ "scene": "demo-a",
+ "title": "Восемь шагов проверки",
+ "title_at": {"reply": 1, "at": 0.05},
+ "chapter_from": "intro",
+ "chapter": "steps",
+ "chapter_at": {"reply": 1, "at": 0.35},
+ "markup": "markup.html",
+ "notes": "Демо ядра. Заголовок входит на первом слове, заливка трекера едет intro → steps. 1: восемь шагов тенями (show level 0.2). 2: плашка-фокус под шагом 1 (layer under), шаги 1 и 5 в чернила двумя ступенями, колокольчик — спутник шага 1 (with) — входит pop и звенит; шаг 1 дышит, колокольчик едет с ним; фокус едет к шагу 5; остальные шаги в чернила. Шов: метка и легенда уходят lift, лента сворачивается каскадом, кружок «1» уходит, текст шага 1 едет в подстроку лида demo-b (move to_text: кегль и цвет одним твином), колокольчик — к колокольчику demo-b (move to_el, отвязка спутника); сдача обоих — cut кадр-в-кадр.",
+ "start_state": {},
+ "end_state": {},
+ "elements": [
+  {"id": "step1", "kind": "step", "x": 1.25, "y": 3.45, "w": 8.45, "h": 0.62, "num": 1, "text": "Проверка данных", "accent": true, "tag": "ВАШ ШАГ", "tag_x": 5.90},
+  {"id": "step2", "kind": "step", "x": 1.25, "y": 4.50, "w": 8.45, "h": 0.62, "num": 2, "text": "Сверка с источником"},
+  {"id": "step3", "kind": "step", "x": 1.25, "y": 5.55, "w": 8.45, "h": 0.62, "num": 3, "text": "Поиск расхождений между версиями"},
+  {"id": "step4", "kind": "step", "x": 1.25, "y": 6.60, "w": 8.45, "h": 0.62, "num": 4, "text": "Запись найденного в журнал"},
+  {"id": "step5", "kind": "step", "x": 10.30, "y": 3.45, "w": 8.45, "h": 0.62, "num": 5, "text": "Согласование правок", "accent": true, "tag": "ВАШ ШАГ", "tag_x": 17.55},
+  {"id": "step6", "kind": "step", "x": 10.30, "y": 4.50, "w": 8.45, "h": 0.62, "num": 6, "text": "Повторная проверка"},
+  {"id": "step7", "kind": "step", "x": 10.30, "y": 5.55, "w": 8.45, "h": 0.62, "num": 7, "text": "Передача результата"},
+  {"id": "step8", "kind": "step", "x": 10.30, "y": 6.60, "w": 8.45, "h": 0.62, "num": 8, "text": "Разбор итогов"},
+  {"id": "bell", "kind": "icon", "x": 4.70, "y": 3.54, "w": 0.44, "h": 0.44, "icon": "bell.svg", "color": "accent", "with": "step1"}
+ ],
+ "beats": [
+  {"reply": 1, "at": 0.40, "action": "show", "targets": ["step1", "step2", "step3", "step4", "step5", "step6", "step7", "step8"], "anim": "rise", "stagger": 0.06, "level": 0.2},
+  {"reply": 2, "at": 0.15, "action": "show", "targets": ["band"], "anim": "fade"},
+  {"reply": 2, "at": 0.25, "action": "level", "targets": ["step1", "step5"], "value": 1, "stagger": 0.15},
+  {"reply": 2, "at": 0.40, "action": "show", "targets": ["legend"], "anim": "fade"},
+  {"reply": 2, "at": 0.45, "action": "show", "targets": ["bell"], "anim": "pop"},
+  {"reply": 2, "at": 0.55, "action": "emph", "targets": ["bell"], "style": "ring"},
+  {"reply": 2, "at": 0.60, "action": "emph", "targets": ["step1"], "style": "breathe", "amp": 0.02, "until": {"reply": 2, "at": 0.93}},
+  {"reply": 2, "at": 0.62, "action": "move", "targets": ["band"], "to": {"x": 10.15, "y": 3.36, "w": 8.75, "h": 0.80}, "dur": 0.6},
+  {"reply": 2, "at": 0.74, "action": "level", "targets": ["step2", "step3", "step4", "step6", "step7", "step8"], "value": 1, "stagger": 0.06},
+  {"reply": 2, "at": 1.0, "offset": -0.45, "action": "hide", "targets": ["band"], "anim": "fade"},
+  {"reply": 2, "at": 1.0, "offset": 0.10, "action": "hide", "targets": ["step1.tag", "legend"], "anim": "lift", "stagger": 0.1},
+  {"reply": 2, "at": 1.0, "offset": 0.13, "action": "hide", "targets": ["step8", "step7", "step6", "step5", "step4", "step3", "step2"], "anim": "lift", "stagger": 0.03},
+  {"reply": 2, "at": 1.0, "offset": 0.45, "action": "hide", "targets": ["step1.num"], "anim": "lift"},
+  {"reply": 2, "at": 1.0, "offset": 0.45, "action": "move", "targets": ["step1.text"], "to_text": {"el": "demo-b:lead", "sub": "проверка данных"}, "color": "ink", "dur": 0.7, "ease": "power3.inOut"},
+  {"reply": 2, "at": 1.0, "offset": 0.45, "action": "move", "targets": ["bell"], "to_el": "demo-b:bell", "dur": 0.7, "ease": "power3.inOut"},
+  {"reply": 2, "at": 1.0, "offset": 1.35, "action": "hide", "targets": ["step1", "bell"], "anim": "cut"}
+ ]
+}

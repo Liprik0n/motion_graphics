@@ -1,0 +1,3 @@
+/* Гравюра, режим «мир»: заголовок — антиквой на картуше (--sty-engravure-title объявляет сборка);
+   строка стоит по центру ленты, которую рисует plugin.js; цвет — роль бренда. */
+#root[data-style="engravure"] .fr-title { font-family: var(--sty-engravure-title); font-size: 52px; letter-spacing: 1px; }

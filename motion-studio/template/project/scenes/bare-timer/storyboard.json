@@ -1,0 +1,17 @@
+{
+ "scene": "bare-timer",
+ "title": "Таймер до события",
+ "frame": false,
+ "markup": "markup.html",
+ "notes": "Фикстура движка (films/bare.json, порчи checks/red_bare.py). Сцена без каркаса: таймер в элементе timer (плагин timer; вид и подписи — tokens.json motion.timer), отсчёт от момента at; подпись под ним входит ещё на шве. Значение — wallclock.timer_at(wall_clock.start, wall_clock.lead_sec, timeline_offset_sec + at, wall_clock.event) из project.json и films/bare.json.",
+ "start_state": {},
+ "end_state": {},
+ "plugins": {
+  "timer": {"host": "timer", "at": {"reply": 3, "at": 0.2}}
+ },
+ "beats": [
+  {"reply": 2, "at": 1, "offset": 0.2, "action": "show", "targets": ["caption"], "anim": "fade"},
+  {"reply": 3, "at": 0.05, "action": "show", "targets": ["head"], "anim": "fade"},
+  {"reply": 3, "at": 0.2, "action": "show", "targets": ["timer"], "anim": "fade"}
+ ]
+}

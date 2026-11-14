@@ -1,0 +1,39 @@
+{
+ "name": "film",
+ "label": "Плёнка",
+ "description": "Мир проектора: тёмный зал, светлый кадр-окно со скруглёнными углами, перфорация сверху и снизу едет, надпечатка на кромке плёнки; в зонах сцены — ракорд с отсчётом 3-2-1, бобина, хлопушка, кусок плёнки с кадрами, луч проектора; зерно, царапины, пылинки, мерцание света — внутри окна, под текстом. Заголовок — антиквой.",
+ "use_for": "разбор реального случая, ретроспектива, кейс из практики (catalog/styles.md, пресет 5)",
+ "decor": {
+  "dark": "#16130F", "screen": "#F3ECDD", "sepia": "#8A6A45", "hole": "#D8CFBE", "edge": "#D9A441",
+  "reel": "#2B2620", "leak": "#F0A050", "slate": "#26221C", "slate_light": "#EDE6D6"
+ },
+ "fonts": {
+  "title": {"family": "Georgia", "files": ["georgiab.ttf", "palab.ttf", "timesbd.ttf"], "weight": 700,
+            "note": "антиква, системный Windows (кириллица проверяется сборкой); нет файла — заголовок фирменным"},
+  "decor": {"family": "Courier New", "files": ["courbd.ttf", "consolab.ttf"], "weight": 700}
+ },
+ "objects": ["countdown", "reel", "slate", "strip", "beam", "sprockets", "edge-print", "grain"],
+ "params": {
+  "win_pad_px": 14,
+  "grain_tiles": 12, "grain_size": 256, "grain_alpha": 0.20, "grain_seed": 35,
+  "vignette": 0.30, "vignette_inner": 52, "vignette_role": "ink",
+  "flicker": 0.03,
+  "scratch_prob": 0.35, "scratch_alpha": 0.22, "dust_max": 5, "dust_alpha": 0.45,
+  "strip_role": "ink", "hole_role": "paper",
+  "strip_top_in": 0.52, "strip_bottom_in": 0.36, "hole_w_in": 0.2, "hole_h_in": 0.15, "hole_pitch_in": 0.46,
+  "world_window": [0.42, 0.62, 19.16, 10.32], "world_radius_px": 18, "world_strip_top_in": 0.58, "world_strip_bottom_in": 0.32,
+  "edge_text": "ПЛЁНКА 35 · 24 КАДРА · ",
+  "strip_speed_in": 0.35, "weave_px": 0.8,
+  "count_from": 3, "reel_turn_sec": 6
+ },
+ "motion": {"icon_step_frames": 1, "icon_overshoot": 0},
+ "sfx": {
+  "_comment": "материал звука: треск проектора (crackle — щелчков в секунду) и приглушённый верх (lp_hz)",
+  "clips": {
+   "whoosh_click": {"lp_hz": 4500, "crackle": 40},
+   "ping": {"lp_hz": 6000, "crackle": 25},
+   "tick": {"crackle": 30}
+  }
+ },
+ "never": ["зерно и блики поверх текста речи", "мерцание кадра сильнее WCAG 2.3 (V23)", "текст вне кадра-окна (тёмный зал — только декор)"]
+}

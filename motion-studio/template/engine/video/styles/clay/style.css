@@ -1,0 +1,4 @@
+/* Глина: CSS только привязанный к стилю (.scene[data-style="clay"], #root[data-style="clay"]).
+   Годится и под замком бренда: карточка и плашка — мягкий пластилиновый брусок: крупное скругление и мягкая тень. */
+.scene[data-style="clay"] .k-card,
+.scene[data-style="clay"] .k-plaque { border-radius: 22px; box-shadow: 0 10px 18px rgba(26, 28, 30, 0.18), inset 0 -5px 0 rgba(26, 28, 30, 0.10); }

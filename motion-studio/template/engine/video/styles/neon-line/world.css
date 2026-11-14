@@ -1,0 +1,4 @@
+/* Мир стиля «неоновый контур»: заголовок каркаса — шрифтом стиля (V22) и светлой ролью бренда: фон мира тёмный,
+   строка заголовка стоит прямо на нём (V21). Фон и предметы рисует plugin.js. */
+#root[data-style="neon-line"] .fr-title { font-family: var(--sty-neon-line-title); }
+#root[data-style="neon-line"] .fr-title .t { color: var(--c-paper); }

@@ -1,0 +1,29 @@
+{
+ "scene": "demo-b",
+ "title": "Кому передать результат",
+ "chapter": "contacts",
+ "markup": "markup.html",
+ "notes": "Демо ядра. Начинается там, где кончилась demo-a: в паузе шва входят тени карточек (show level 0.2), лид проявляется без своей подстроки (часть slot — на её месте едущий текст шага 1) и принимает его подменой кадр-в-кадр (show cut lead.slot), колокольчик — спутник лида — принимается так же. Трекер глав меняется на шве (steps → contacts). 3: карточки в чернила, первая дышит. 4: плашка, прожектор — карточки приглушены и возвращаются.",
+ "start_state": {},
+ "end_state": {},
+ "elements": [
+  {"id": "bell", "kind": "icon", "x": 8.05, "y": 3.43, "w": 0.44, "h": 0.44, "icon": "bell.svg", "color": "accent", "with": "lead"},
+  {"id": "card1", "kind": "card", "x": 1.25, "y": 4.20, "w": 8.65, "h": 1.85, "icon": "person.svg", "text": "Руководитель группы"},
+  {"id": "card2", "kind": "card", "x": 10.10, "y": 4.20, "w": 8.65, "h": 1.85, "icon": "person.svg", "text": "Ответственный за данные"},
+  {"id": "card3", "kind": "card", "x": 1.25, "y": 6.25, "w": 8.65, "h": 1.85, "icon": "person.svg", "text": "Редактор"},
+  {"id": "card4", "kind": "card", "x": 10.10, "y": 6.25, "w": 8.65, "h": 1.85, "icon": "group.svg", "text": "Все участники проекта, которые работают с этими данными"},
+  {"id": "plaque", "kind": "plaque", "x": 1.25, "y": 8.65, "w": 17.50, "h": 0.90, "icon": "bell.svg", "tone": "warn", "text": "Контакты ответственных — в карточке проекта"}
+ ],
+ "beats": [
+  {"reply": 3, "at": 0.0, "offset": -0.85, "action": "show", "targets": ["card1", "card2", "card3", "card4"], "anim": "rise", "stagger": 0.1, "level": 0.2},
+  {"reply": 3, "at": 0.0, "offset": -0.55, "action": "show", "targets": ["lead"], "anim": "fade"},
+  {"reply": 3, "at": 0.0, "offset": -0.25, "action": "show", "targets": ["bell", "lead.slot"], "anim": "cut"},
+  {"reply": 3, "at": 0.35, "action": "level", "targets": ["card1", "card2", "card3", "card4"], "value": 1, "stagger": 0.25},
+  {"reply": 3, "at": 0.55, "action": "emph", "targets": ["card1"], "style": "breathe", "until": {"reply": 3, "at": 0.95}},
+  {"reply": 3, "at": 0.70, "action": "emph", "targets": ["bell"], "style": "ring", "amp": 10, "dur": 0.6},
+  {"reply": 4, "at": 0.05, "action": "show", "targets": ["plaque"], "anim": "wipe"},
+  {"reply": 4, "at": 0.05, "action": "level", "targets": ["card1", "card2", "card3", "card4"], "value": 0.45},
+  {"reply": 4, "at": 0.45, "action": "emph", "targets": ["plaque"]},
+  {"reply": 4, "at": 0.60, "action": "level", "targets": ["card1", "card2", "card3", "card4"], "value": 1}
+ ]
+}

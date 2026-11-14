@@ -1,0 +1,9 @@
+<!-- Своя разметка сцены: верхний элемент — class="el", id и позиция в px (дюйм × px_per_in).
+     Сборка добавит к id префикс сцены; бит раскадровки ссылается на «legend» и «band».
+     Цвета — только переменные палитры tokens.json (var(--c-<роль>)), не hex: смена токена меняет разметку.
+     Плашка-фокус — data-layer="under": слоем под шагами. -->
+<div class="el" id="legend" style="left:988.8px; top:849.6px; width:811.2px; height:86.4px;">
+  <div style="position:absolute; left:15.4px; top:28.8px; width:28.8px; height:28.8px; border-radius:50%; background:var(--c-accent);"></div>
+  <span class="t" style="position:absolute; left:81.6px; top:27px; font-size:24px; color:var(--c-subtle); line-height:1.2; white-space:nowrap;">шаг, который выполняете вы</span>
+</div>
+<div class="el" id="band" data-layer="under" style="left:105.6px; top:322.56px; width:840px; height:76.8px; background:var(--c-primary_pale);"></div>

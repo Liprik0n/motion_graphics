@@ -1,0 +1,6 @@
+/* Плёнка: CSS только привязанный к стилю (.scene[data-style="film"], #root[data-style="film"]).
+   Цвета и шрифт содержания не трогать (V22): плёнка — слой под содержанием (plugin.js). */
+
+/* плашки и карточки лежат на плёнке: мягкая тень одного источника света (вниз-вправо) */
+.scene[data-style="film"] .k-card,
+.scene[data-style="film"] .k-plaque { box-shadow: 3px 5px 14px rgba(16, 26, 40, 0.22); }

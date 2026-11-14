@@ -1,0 +1,4 @@
+/* Зин-коллаж: CSS только привязанный к стилю (.scene[data-style="zine"], #root[data-style="zine"]).
+   Годится и под замком бренда: карточка и плашка — наклеенный лист с жёсткой тенью, прямые углы. */
+.scene[data-style="zine"] .k-card,
+.scene[data-style="zine"] .k-plaque { border-radius: 0; box-shadow: 4px 6px 0 rgba(26, 28, 30, 0.22); }

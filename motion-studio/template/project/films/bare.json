@@ -1,0 +1,12 @@
+{
+ "title": "Фикстура: сцены без каркаса — картинка-кадр, помехи, таймер",
+ "scenes": ["bare-start", "bare-timer"],
+ "timeline_offset_sec": 190.0,
+ "replies": [
+  {"n": 1, "scene": "bare-start", "voice": "a", "emotion": "Happy", "file": "demo-audio/130.mp3"},
+  {"n": 2, "scene": "bare-start", "voice": "b", "emotion": "Neutral", "file": "demo-audio/131.mp3"},
+  {"n": 3, "scene": "bare-timer", "voice": "a", "emotion": "Fluent", "file": "demo-audio/142.mp3"},
+  {"n": 4, "scene": "bare-timer", "voice": "b", "emotion": "Neutral", "file": "demo-audio/145.mp3"}
+ ],
+ "_comment": "Приёмочный фильм возможностей движка (engine/video/plugins/README.md): обе сцены без каркаса (frame: false) — на странице каркаса нет вовсе (V26); bare-start начинается с картинки-кадра (start_image, V28) и рвётся помехами (plugins.glitch, V27); bare-timer показывает таймер до события (plugins.timer, V29). timeline_offset_sec — где кусок стоит в склейке: таймер считает момент кадра от него и от project.json wall_clock. Звук — mp3 демо. Порчи и образцы — engine/video/checks/red_bare.py."
+}

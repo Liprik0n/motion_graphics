@@ -1,0 +1,6 @@
+/* Пиксель, режим «мир» (не кладётся при project.json style_brand_lock: true).
+   Заголовок рисует plugin.js пикселями (fonts.title.kind "code"); текст каркаса остаётся для раскладки и V10, но не виден. */
+#root[data-style="pixel"] .fr-title .t { color: transparent; }
+/* Надпись сцены, нарисованная клетками (PixelKit.text): текст .t.px остаётся для раскладки и промера (V4, V10, V17, V21 —
+   контраст по пикселям в рамке строки, то есть по нарисованным клеткам), но не виден — как заголовок кодом. */
+.scene[data-style="pixel"] .el .t.px { color: transparent !important; }

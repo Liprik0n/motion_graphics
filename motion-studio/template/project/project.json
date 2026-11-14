@@ -1,0 +1,59 @@
+{
+ "template_demo": true,
+ "title": "Демо-ролик шаблона motion-studio",
+ "fps": 30,
+ "canvas": {"w": 1920, "h": 1080, "px_per_in": 96},
+ "work_zone": {"x0": 1.25, "x1": 18.75, "y0": 3.30, "y1": 10.05},
+ "chapters": [
+  {"id": "intro", "label": "ВВЕДЕНИЕ"},
+  {"id": "steps", "label": "ШАГИ"},
+  {"id": "contacts", "label": "КОНТАКТЫ"},
+  {"id": "summary", "label": "ИТОГ"}
+ ],
+ "footer": "Демо-ролик · шаблон motion-studio",
+ "paths": {"text": "text", "voices_out": "out/tts", "out": "out", "scenes": "scenes", "films": "films", "icons": "assets/icons"},
+ "scene_gap_sec": 1.6,
+ "pause_sec": 0.45,
+ "lead_sec": 0.6,
+ "tail_sec": 0.6,
+ "scene_exit_delay": 0.1,
+ "wall_clock": {"start": "2030-01-15T18:00:00+03:00", "lead_sec": 600.0, "event": "2030-01-16T00:00:00+03:00",
+  "_comment": "Настенное время ролика (плагины timer и clock, engine/video/wallclock.py): start — когда ролик начинают смотреть (ISO 8601 с поясом — обязателен); lead_sec — сколько секунд идёт до первого кадра склейки (то, что смотрят перед роликом; 0 — ролик идёт первым); event — момент события, к которому считает таймер. Смещение куска в склейке — films/<f>.json timeline_offset_sec. Сдвинулся старт — правится только start, пересобирается кусок с таймером или часами и склейка. Здесь — значения демо-фикстур."},
+ "fonts": [
+  {"role": "digits", "family": "Demo Digits", "files": {"700": "assets/fonts/LiberationSansNarrow-Bold.ttf"},
+   "note": "Роль шрифта проекта сверх фирменного (tokens.json fonts → brand): цифры таймера и часов демо-фикстур. Тот же файл демо-шрифта (Liberation Sans Narrow) под своим именем семейства; свой шрифт — путь от корня проекта, перед Chrome прогнать engine/video/tools/fix_font.py. Роль даёт CSS-переменную --font-digits; повтор роли из tokens.json — отказ сборки."}
+ ],
+ "legibility_except": [
+  {"el": "act-sign:sign-dim", "max_opacity": 0.3, "min_visible": 0.05, "min_visible_sec": 2.0,
+   "why": "демо-фикстура films/acts.json: вывеска намеренно едва читается — не выше трети яркости и видна не меньше 2 с"}
+ ],
+ "text_guard": {
+  "rules": [
+   {"name": "текст-заглушка", "re": "(?i)lorem|ipsum|рыба-текст|\\bTODO\\b"},
+   {"name": "время цифрами", "re": "\\d{1,2}\\s*:\\s*\\d{2}", "scenes": ["act-stage"], "except": ["сверка в 00:00"]}
+  ],
+  "_comment": "Сторож текста проекта (V34): правила {name, re, scenes?, els?, except?} по тексту кадра (надписи .t видимых элементов промера) и по разметке сцен фильма (без тегов, комментариев и скриптов). re — регулярное выражение Python; scenes — только эти сцены (иначе все); els — только эти элементы; except — законные строки, которые вырезаются до поиска. Здесь — правила демо: заглушка текста не доходит до кадра; в сцене с часами время цифрами не вписывают руками (его считает плагин clock; цифры плагина — не надписи .t, сторож их не видит). Запреты своего ролика (имена, старые названия, цифры, которые считает сборка) пишутся сюда же."
+ },
+ "_fixtures_comment": "wall_clock, fonts, legibility_except, text_guard и числа tokens.json motion.glitch/timer/clock/act держат демо-фикстуры films/bare.json, acts.json, acts-hide.json (сцены bare-*, act-*). Удаляя фикстуры, удали и записи, которые называют их сцены; своему ролику эти же ключи служат так же.",
+ "frame": {
+  "title": {"box": [1.25, 2.19, 17.50, 0.72], "type": "title", "color": "ink"},
+  "number": {"box": [18.34, 10.40, 0.41, 0.38], "type": "number", "color": "primary"},
+  "footer": {"box": [1.25, 10.38, 8.00, 0.42], "type": "footer", "color": "footer"},
+  "lines": [[1.25, 2.07, 17.50, 0.02], [1.25, 10.15, 17.50, 0.02]],
+  "line_color": "line",
+  "tracker": {"box": [11.47, 0.95, 7.28, 0.54], "gap": 0.0, "type": "tracker", "color": "subtle", "fill": "primary", "on_color": "paper", "line": "line"},
+  "seam_half": 0.35,
+  "seam_dur": 0.5
+ },
+ "voice_bars": {
+  "on": true,
+  "box_y": 10.38, "box_h": 0.42,
+  "bars": 3, "bar_w": 0.05, "bar_step": 0.09, "min": 0.05, "max": 0.26,
+  "mute": "footer", "ink": "text", "type": "voice",
+  "voices": [
+   {"id": "a", "label": "ГОЛОС А", "color": "accent", "x": 14.90, "w": 1.55},
+   {"id": "b", "label": "ГОЛОС Б", "color": "primary", "x": 16.55, "w": 1.55}
+  ]
+ },
+ "_comment": "Единственный источник констант видео вместе с tokens.json: координаты — дюймы полотна (canvas.w / px_per_in × canvas.h / px_per_in); цвета — имена ролей палитры tokens.json; type — роль кегля tokens.json.type; voice_bars.voices[].id — id голоса из voices.json / строк озвучки."
+}

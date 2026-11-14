@@ -1,0 +1,3 @@
+/* Лайн-бойл, режим «мир»: заголовок — округлым рукописным (--sty-line-boil-title объявляет сборка).
+   Кегль 44 px: строка рукописного шрифта ≈ 1,4 кегля — так она помещается в рамку заголовка (V10). */
+#root[data-style="line-boil"] .fr-title { font-family: var(--sty-line-boil-title); font-size: 44px; }

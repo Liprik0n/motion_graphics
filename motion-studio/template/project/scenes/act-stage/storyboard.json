@@ -1,0 +1,23 @@
+{
+ "scene": "act-stage",
+ "title": "Действия мира и камера",
+ "chapter": "intro",
+ "markup": "markup.html",
+ "notes": "Фикстура движка (films/acts.json; на ней стоят порчи engine/video/checks/red_acts.py — не удалять, пока нужны условия V30–V35). Сцена с каркасом: часы в элементе clock (плагин clock, вид — tokens.json motion.clock); метки act — камера от положения near к wide (cam_move), жест фигуры (исполнитель в разметке), удар крышки на немой строке 901 (knock: кадр вздрагивает). Следом идёт сцена без каркаса — на стыке общий каркас гаснет за ± frame.seam_half.",
+ "start_state": {},
+ "end_state": {},
+ "plugins": {
+  "clock": {"host": "clock"},
+  "act": {
+   "cues": [
+    {"id": "c01", "t": {"reply": 1, "at": 0.1}, "who": "cam", "do": "move", "from": "near", "to": "wide", "motion": "cam_move", "note": "отъезд камеры"},
+    {"id": "c02", "t": {"reply": 1, "at": 0.6}, "who": "figure", "do": "raise", "motion": "gesture", "note": "жест фигуры"},
+    {"id": "c03", "t": {"reply": 901, "at": 0.2}, "who": "lid", "do": "shut", "motion": "knock", "note": "удар крышки: кадр вздрагивает"}
+   ]
+  }
+ },
+ "beats": [
+  {"reply": 1, "at": 0, "offset": -0.3, "action": "show", "targets": ["label", "clock"], "anim": "fade"},
+  {"reply": 1, "at": 0.3, "action": "show", "targets": ["figure", "lid"], "anim": "fade"}
+ ]
+}

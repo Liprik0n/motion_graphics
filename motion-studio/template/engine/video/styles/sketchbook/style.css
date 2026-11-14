@@ -1,0 +1,9 @@
+/* Скетчбук: CSS только привязанный к стилю — .scene[data-style="sketchbook"] (содержание сцены)
+   и #root[data-style="sketchbook"] (каркас). Палитру и шрифт текста не трогать (V22). */
+
+/* иконки кипят: фильтр #sk-boil создаёт plugin.js (feTurbulence → feDisplacementMap, сид — рисунок «на двойках») */
+.scene[data-style="sketchbook"] .k-icon svg,
+.scene[data-style="sketchbook"] .ico svg { filter: url(#sk-boil); }
+
+/* линии каркаса — тоньше и светлее, как разметка листа (цвет — та же роль line) */
+#root[data-style="sketchbook"] .fr-line { opacity: 0.6; }
