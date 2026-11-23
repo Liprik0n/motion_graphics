@@ -341,7 +341,7 @@
       g.nodes.push({ L: L, S: S, fontPx: fontPx, color: color });
     });
     NODES.forEach(function (nd, i) { nd.node.style.transform = saved[i]; });
-    g.final = !document.fonts || document.fonts.status === 'loaded';
+    g.final = window.StageFonts.all();      // пока начертания страницы не пришли, геометрия мерится заново (lib/fonts.js)
     return g;
   }
   function G() { if (!geom || !geom.final) geom = measure(); return geom; }
@@ -645,6 +645,20 @@
               styleConfig: styleConfig, styleScenes: styleScenes, addLayer: addLayer, sceneWeight: sceneWeight,
               styleOpacity: styleOpacity };
   var PLUGINS = (window.StagePlugins || []).map(function (f) { return f(FILM, API); });
+
+  // ---------------------------------------------------------------- текст не из DOM (проверка читаемости V37)
+  /* Надпись, нарисованную на canvas (или иначе мимо .t), проверка сама не найдёт: сцена объявляет её области.
+     window.__textRects(t) → [{id, rect: [x, y, w, h], text, opacity}] — рамка каждой строки в px кадра (плотно по
+     строке), t — секунды фильма; opacity (0…1, без поля — 1) — насколько строка видна: мерится только видимая
+     на 1,0. Объявить можно двумя путями, они складываются: сцена до stage.js пишет window.__textRects = function (t) {…};
+     плагин сцены (window.StagePlugins) возвращает метод textRects(t) — так у каждой сцены свои области.
+     Промер зовёт функцию в каждом кадре полосы после render(t). */
+  var declaredTextRects = typeof window.__textRects === 'function' ? window.__textRects : null;
+  window.__textRects = function (t) {
+    var out = declaredTextRects ? (declaredTextRects(t) || []).slice() : [];
+    PLUGINS.forEach(function (p) { if (p && typeof p.textRects === 'function') out = out.concat(p.textRects(t) || []); });
+    return out;
+  };
 
   // ---------------------------------------------------------------- кадр целиком
   function render(t) {

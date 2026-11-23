@@ -1,10 +1,16 @@
 {
   "name": "motion-studio-engine",
+  "version": "2.0.0",
   "private": true,
-  "description": "Зависимости движка видео шаблона motion-studio: композиция HyperFrames, анимация GSAP, безголовый Chrome для промеров",
+  "description": "Набор Node для движка motion-studio: ставится один раз в общую папку (~/.motion-studio), проекты подключают его ссылкой. Ставит tools/setup.py install.",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22"
+  },
   "dependencies": {
     "gsap": "3.13.0",
-    "hyperframes": "0.8.181",
+    "hyperframes": "0.9.20",
+    "lottie-web": "5.12.2",
     "puppeteer-core": "25.16.0"
   }
 }

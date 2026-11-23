@@ -1,0 +1,10 @@
+[
+ {"n": 1, "scene": "silent-a", "voice": "none", "ms": 2000, "scene_start": 0, "silent": true, "what": "такт 1: ударная доля"},
+ {"n": 2, "scene": "silent-a", "voice": "none", "ms": 2000, "scene_start": 2.0, "silent": true, "what": "такт 2"},
+ {"n": 3, "scene": "silent-a", "voice": "none", "ms": 2000, "scene_start": 4.0, "silent": true, "what": "такт 3"},
+ {"n": 4, "scene": "silent-a", "voice": "none", "ms": 2000, "scene_start": 6.0, "silent": true, "what": "такт 4: акцент, перезвон"},
+ {"n": 5, "scene": "silent-b", "voice": "none", "ms": 2000, "scene_start": 0, "silent": true, "what": "такт 5: вход сцены"},
+ {"n": 6, "scene": "silent-b", "voice": "none", "ms": 2000, "scene_start": 2.0, "silent": true, "what": "такт 6"},
+ {"n": 7, "scene": "silent-b", "voice": "none", "ms": 2000, "scene_start": 4.0, "silent": true, "what": "такт 7"},
+ {"n": 8, "scene": "silent-b", "voice": "none", "ms": 2000, "scene_start": 6.0, "silent": true, "what": "такт 8: акцент, перезвон"}
+]

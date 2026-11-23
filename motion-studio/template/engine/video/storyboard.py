@@ -287,6 +287,7 @@ _GOOD = {
     'decor_zones': [{'x': 10.3, 'y': 5.6, 'w': 8.45, 'h': 2.85}],
     'title_at': {'reply': 3, 'at': 0.1}, 'chapter': 'steps', 'chapter_from': 'intro', 'chapter_at': {'reply': 3, 'at': 0.3},
     'tracker_emph': [{'reply': 3, 'at': 0.5}],
+    'still': {'from': {'reply': 3, 'at': 0.6}, 'to': {'reply': 3, 'at': 1, 'offset': 1.5}, 'why': 'титр держится до конца реплики'},
     'elements': [{'id': 'a', 'kind': 'text', 'x': 1, 'y': 4, 'w': 5, 'h': 0.5, 'text': 'A б', 'size': 20, 'layer': 'under',
                   'color': 'highlight', 'text_parts': {'b': 'б'}},
                  {'id': 'hd', 'kind': 'box', 'x': 1.25, 'y': 3.45, 'w': 8.65, 'h': 0.8, 'tone': 'mid', 'fill': 'accent_pale',
@@ -400,6 +401,9 @@ RED = [
     ('старое имя phase', _set(['phase'], 'steps'), '$: лишнее поле «phase»'),
     ('стиль не из папок styles/', _set(['style'], 'watercolor'), "$.style: 'watercolor' не из"),
     ('стиль списком', _set(['style'], ['film']), "$.style: ['film'] не из"),
+    ('пауза без причины', _set(['still', 'why'], _DEL), '$.still: нет поля «why»'),
+    ('пауза в секундах, а не якорем', _set(['still', 'from'], 4.5), '$.still.from: ожидается object'),
+    ('пустой список пауз', _set(['still'], []), '$.still: меньше 1 элементов'),
     ('зона декора без высоты', _set(['decor_zones', 0, 'h'], _DEL), '$.decor_zones[0]: нет поля «h»'),
     ('зона декора за полотном', _set(['decor_zones', 0, 'x'], 25), '$.decor_zones[0].x: 25 больше 20'),
 ]

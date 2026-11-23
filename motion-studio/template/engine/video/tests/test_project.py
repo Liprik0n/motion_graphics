@@ -7,8 +7,10 @@
 Каждый тест работает на копии `project/` во временной папке; поставка не трогается.
 Сеть не открывается: озвучка — провайдер `fake` (синус), сборка — только `--page`.
 Нужен engine/video/node_modules (проект из new_project.py его кладёт).
-Ожидаемые значения — из спецификации ремонта F1 (поля конфигов, правило корня), а не из кода.
+Ожидаемые значения — из спецификации конфигов (поля конфигов, правило корня), а не из кода.
 """
+NEEDS_CHROME = True      # тест запускает безголовый браузер: общий прогон берёт на него замок и не зовёт в --quick
+
 import ast
 import json
 import os
@@ -29,7 +31,7 @@ PY = sys.executable
 
 FAILS = []
 
-# Обязательные ключи (спецификация F1, п. 4): удаление каждого — отказ с именем поля
+# Обязательные ключи (спецификация конфигов, п. 4): удаление каждого — отказ с именем поля
 REQUIRED_PROJECT = ['fps', 'canvas.w', 'canvas.h', 'canvas.px_per_in', 'pause_sec', 'scene_gap_sec',
                     'lead_sec', 'tail_sec', 'scene_exit_delay', 'frame.seam_half', 'frame.seam_dur',
                     'paths.out', 'paths.voices_out', 'voice_bars.min', 'voice_bars.max']

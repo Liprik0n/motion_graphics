@@ -135,6 +135,21 @@
    "type": "string",
    "description": "Для людей; сборка не читает"
   },
+  "still": {
+   "description": "Законная пауза: отрезок сцены, где кадр стоит по замыслу (титр, стоп-кадр, чтение длинной цитаты). Проверка живости по зонам (V36) не считает его простоем. Одна пауза — объект, несколько — список. Сборка поле не читает",
+   "if": {
+    "type": "array"
+   },
+   "then": {
+    "minItems": 1,
+    "items": {
+     "$ref": "#/$defs/still_span"
+    }
+   },
+   "else": {
+    "$ref": "#/$defs/still_span"
+   }
+  },
   "start_state": {
    "$ref": "#/$defs/state"
   },
@@ -184,6 +199,28 @@
      "type": "number",
      "minimum": -2,
      "maximum": 2
+    }
+   }
+  },
+  "still_span": {
+   "description": "Пауза по замыслу: от момента from до момента to; why — зачем кадр стоит (читает человек)",
+   "type": "object",
+   "additionalProperties": false,
+   "required": [
+    "from",
+    "to",
+    "why"
+   ],
+   "properties": {
+    "from": {
+     "$ref": "#/$defs/when"
+    },
+    "to": {
+     "$ref": "#/$defs/when"
+    },
+    "why": {
+     "type": "string",
+     "minLength": 3
     }
    }
   },
@@ -317,7 +354,8 @@
       "icon",
       "box",
       "bullet",
-      "quiz"
+      "quiz",
+      "lottie"
      ]
     }
    },
@@ -738,6 +776,51 @@
         "type": "string",
         "pattern": "^[a-z0-9-]+$",
         "description": "Спутник: id надписи этой сцены, с которой иконка едет всё время (её move, пульс, дыхание, подъём) — README «Спутники»"
+       }
+      },
+      "additionalProperties": false
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "kind": {
+        "const": "lottie"
+       }
+      }
+     },
+     "then": {
+      "required": [
+       "src"
+      ],
+      "properties": {
+       "id": true,
+       "kind": true,
+       "x": true,
+       "y": true,
+       "w": true,
+       "h": true,
+       "layer": {
+        "$ref": "#/$defs/layer"
+       },
+       "src": {
+        "type": "string",
+        "pattern": "^[^:]+\\.json$",
+        "description": "Файл анимации Lottie (JSON): путь от корня проекта, иначе от engine/video. Вшивается в страницу; адрес сети, отдельные картинки и выражения — отказ сборки"
+       },
+       "at": {
+        "$ref": "#/$defs/when",
+        "description": "Момент, с которого анимация идёт; без поля — начало сцены"
+       },
+       "speed": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "maximum": 8,
+        "description": "Во сколько раз быстрее файла (по умолчанию 1)"
+       },
+       "loop": {
+        "type": "boolean",
+        "description": "По кругу; без поля — доиграв, держит последний кадр"
        }
       },
       "additionalProperties": false

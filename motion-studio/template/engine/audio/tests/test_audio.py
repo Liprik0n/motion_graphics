@@ -186,11 +186,145 @@ def test_end_to_end(tmp):
            '%s: нет абсолютных путей и сетевых вызовов' % name)
 
 
+# ---------------------------------------------------------------- фильм без голоса: опора — музыка
+
+WORLD = {'min_gap_sec': 1.5, 'keep_prio': 9, 'silent_marks': {'hush': 'молчит: звук даёт событие act'},
+         'events': [{'kind': 'mark', 'match': {'name': 'grain'}, 'clip': 'puff', 'gain_db': -16, 'prio': 2,
+                     'texture': True},
+                    {'kind': 'mark', 'match': {'name': ['ding', 'dive']}, 'clip': 'ding', 'gain_db': -12, 'prio': 5},
+                    {'kind': 'mark', 'match': {'name': 'swoosh'}, 'clip': 'swish', 'gain_db': -12, 'prio': 5,
+                     'shift_sec': 0.25},
+                    {'kind': 'act', 'match': {'who': 'bulbs', 'do': 'on'}, 'clip': 'bulb', 'variants': 8,
+                     'gain_db': -17, 'prio': 1, 'texture': True}]}
+
+
+def mark(t, name, cue='c1'):
+    return {'kind': 'mark', 't': t, 'scene': 's1', 'ref': '%s/%s' % (cue, name), 'name': name, 'dur': 0.0}
+
+
+def test_world_plan():
+    import sfx
+    film = {'replies': [{'num': 1, 'start': 0.0, 'end': 2.0}, {'num': 2, 'start': 2.0, 'end': 4.2}],
+            'acts': [{'scene': 's1', 'id': 'e1', 't': 3.0, 'who': 'bulbs', 'do': 'on', 'span': 0.3}]}
+    ok(abs(sfx.anchor_t({'reply': 2, 'at': 0.25}, film) - 2.55) < 1e-9,
+       'якорь метки {reply, at} → начало строки + доля × длина (как engine/video/build.py)')
+    ev = [mark(1.0, 'ding'), mark(1.1, 'grain'), mark(1.2, 'grain', 'c2'), mark(1.9, 'dive'), mark(6.0, 'swoosh'),
+          mark(1.5, 'hush')] + sfx.act_events(film)
+    cues, dropped = sfx.plan(ev, WORLD)
+    ok([c['clip'] for c in cues] == ['ding', 'puff', 'puff', 'bulb', 'swish'],
+       'фактура (texture) вне плотности: две «крупинки» и лампочка рядом с акцентом остаются')
+    ok(len(dropped) == 1 and dropped[0]['event'] == 'mark:c1/dive',
+       'акценты по-прежнему не ближе min_gap_sec: второй звон через 0,9 с выпал')
+    sw = [c for c in cues if c['clip'] == 'swish'][0]
+    ok(abs(sw['hit'] - 6.25) < 1e-9 and abs(sw['onset'] - 6.25) < 1e-9,
+       'shift_sec: удар позже события на 0,25 с; у звуков мира удар = начало')
+    ok(raises(lambda: sfx.plan([mark(2.0, 'гром')], WORLD), 'без правила'),
+       'метка раскадровки без правила и без silent_marks — ошибка сборки с её именем')
+    bad = copy.deepcopy(WORLD)
+    bad['events'][0]['texture'] = 'да'
+    ok(raises(lambda: sfx.plan([mark(2.0, 'grain')], bad), 'texture'), 'texture не bool — ошибка конфига')
+
+
+def test_clips_soft():
+    """Клипы мира: внутри нет удара (кадр 5 мс громче 20 мс перед ним на 9 дБ) — иначе M10 видит звук без метки."""
+    import synth
+    worst = []
+    for clip in ('rustle', 'fold', 'puff', 'sprinkle', 'crumble', 'leaves', 'airy', 'bud', 'bulb', 'ding', 'zip',
+                 'swish', 'bouquet', 'sparkle', 'shimmer', 'chime_g'):
+        x, hit = synth.synth(clip, 777, 0)
+        f = 220
+        en = [10 * __import__('math').log10(sum(u * u for u in x[i:i + f]) / f + 1e-30) for i in range(0, len(x) - f + 1, f)]
+        inner = [i for i in range(4, len(en)) if en[i] - max(en[i - 4:i]) >= 9 and en[i] > -120]
+        if hit != 0.0 or inner:
+            worst.append('%s: удар %.3f, внутри %s' % (clip, hit, inner[:3]))
+    ok(not worst, 'клипы мира: удар = начало, внутренних ударов нет%s' % (': ' + '; '.join(worst) if worst else ''))
+
+
+def test_without_voice_scope():
+    """Ожидания — из описания ключа (music.json, ключи): true — любой фильм проекта без голоса, список — только названные."""
+    import config
+    ok(config.without_voice({'without_voice': True}, 'any') and not config.without_voice({}, 'any'),
+       'without_voice: true разрешает любой фильм, ключа нет — не разрешает')
+    ok(config.without_voice({'without_voice': ['silent']}, 'silent') and not config.without_voice({'without_voice': ['silent']}, 'demo'),
+       'without_voice: список — только названный фильм; озвученный фильм рядом по-прежнему требует реплики с mp3')
+    ok(not config.without_voice({'without_voice': []}, 'silent') and not config.without_voice({'without_voice': 'silent'}, 'silent'),
+       'пустой список и строка вместо списка — не разрешение')
+
+
+def music_only_project(tmp, flag=True):
+    proj = tiny_project(tmp)
+    mc = json.loads((proj / 'music.json').read_text(encoding='utf-8'))
+    mc['without_voice'] = flag
+    mc['tracks'] = [{'chapter': '*', 'file': 'music/placeholder-pad.wav', 'license': 'тест: синтезированный пэд',
+                     'loop_in': 2.0, 'loop_out': 22.0}]
+    mc.pop('tail_fade_sec', None)
+    (proj / 'music.json').write_text(json.dumps(mc, ensure_ascii=False), encoding='utf-8')
+    sc = dict(json.loads((proj / 'sfx.json').read_text(encoding='utf-8')), **copy.deepcopy(WORLD))
+    sc.update(over_music_target_db=-6.0, over_music_max_db=-3.0, music_ref_pad_sec=1.0)
+    (proj / 'sfx.json').write_text(json.dumps(sc, ensure_ascii=False), encoding='utf-8')
+    out = proj / 'out' / 'tiny'
+    film = json.loads((out / 'film.json').read_text(encoding='utf-8'))
+    film['scenes'] = [{'id': 's1'}]                 # без глав → одна часть «*»
+    film['events'] = []
+    film['replies'] = [{'n': 1, 'num': 1, 'scene': 's1', 'voice': 'none', 'start': 0.0, 'end': 6.0, 'silent': True,
+                        'file': None},
+                       {'n': 2, 'num': 2, 'scene': 's1', 'voice': 'none', 'start': 6.0, 'end': 12.0, 'silent': True,
+                        'file': None}]
+    film['acts'] = [{'scene': 's1', 'id': 'e%d' % k, 't': 6.0 + 0.55 * k, 'who': 'bulbs', 'do': 'on', 'span': 0.3}
+                    for k in range(3)]
+    (out / 'film.json').write_text(json.dumps(film, ensure_ascii=False), encoding='utf-8')
+    sb = proj / 'scenes' / 's1'
+    sb.mkdir(parents=True, exist_ok=True)
+    (sb / 'storyboard.json').write_text(json.dumps({'plugins': {'act': {'cues': [
+        {'id': 'c1', 't': {'reply': 1, 'at': 0}, 'sfx': [{'name': 'grain', 't': {'reply': 1, 'at': 0.25}, 'role': 'texture'},
+                                                         {'name': 'ding', 't': {'reply': 1, 'at': 0.5}, 'role': 'accent'},
+                                                         {'name': 'hush', 't': {'reply': 2, 'at': 0}, 'role': 'texture'}]},
+        {'id': 'c2', 't': {'reply': 2, 'at': 0.5}, 'sfx': [{'name': 'swoosh', 't': {'reply': 2, 'at': 0.5}, 'role': 'accent'}]}]}}},
+        ensure_ascii=False), encoding='utf-8')
+    return proj
+
+
+def test_music_only(tmp):
+    import dsp
+    proj = music_only_project(tmp)
+    out = proj / 'out' / 'tiny'
+    code, text = run_py('music.py', 'tiny', '--project', str(proj))
+    ok(code == 0 and (out / 'mix.m4a').exists(), 'без голоса: music.py собирает микс «музыка + эффекты»: %s' % text[-300:].strip())
+    if code:
+        return
+    cues = json.loads((out / 'cues.json').read_text(encoding='utf-8'))
+    fx = cues['sfx']
+    ok(cues['voice'] is False and [p['chapters'] for p in cues['parts']] == [['*']],
+       'метки: голоса нет, фильм без глав — одна часть «*»')
+    ok([c['event']['ref'] for c in fx] == ['c1/grain', 'c1/ding', 'e0', 'e1', 'e2', 'c2/swoosh'],
+       'события звука: метки sfx раскадровки (время по строкам) и acts; молчащая метка не звучит')
+    want = {'puff': -16, 'ding': -12, 'bulb': -17, 'swish': -12}
+    ok(all(c['level']['where'] == 'музыка' and abs(c['level']['rel_db'] - want[c['clip']]) < 0.05 for c in fx),
+       'уровень эффекта — gain_db относительно музыки рядом: %s' % ', '.join('%s %+.1f' % (c['clip'], c['level']['rel_db']) for c in fx))
+    first = {n: dsp.sha1(out / n) for n in ('mix.m4a', 'music.wav', 'sfx.wav')}
+    run_py('music.py', 'tiny', '--project', str(proj))
+    ok(first == {n: dsp.sha1(out / n) for n in ('mix.m4a', 'music.wav', 'sfx.wav')}, 'без голоса: пересборка байт в байт')
+    lufs, tp = dsp.lufs(['-i', str(out / 'mix.m4a')])
+    ok(abs(lufs + 16.0) <= 1.0 and tp <= -1.0, 'без голоса: микс −16 ± 1 LUFS, пик ≤ −1 dBTP: %.2f LUFS, %.2f dBTP' % (lufs, tp))
+    code, text = run_py('check_mix.py', 'tiny', '--project', str(proj))
+    ok(code == 0 and 'M11 эффекты ≤' in text and '--  M5 голоса нет' in text,
+       'check_mix.py без голоса зелёный: M5/M9 пропущены, M11 — к музыке: %s' % text.strip().splitlines()[-1])
+    code, text = run_py('sfx.py', 'tiny', '--project', str(proj))
+    ok(code == 0 and (out / 'sfx-proba.mp3').exists() and 'проба: 6 кусков' in text,
+       'sfx.py без голоса: проба — куски микса по одному звуку подряд с паузами: %s'
+       % text.strip().splitlines()[-2])
+    proj2 = music_only_project(Path(tmp) / 'b', flag=False)
+    code, text = run_py('music.py', 'tiny', '--project', str(proj2))
+    ok(code != 0 and 'without_voice' in text, 'фильм без голоса без флага without_voice — отказ с подсказкой')
+
+
 def main():
     args = sys.argv[1:]
     tmp_root = args[args.index('--tmp') + 1] if '--tmp' in args else None
     for name, fn in (('музыка: главы → части', test_parts), ('музыка: круг трека', test_layout),
-                     ('эффекты: план по событиям', test_plan)):
+                     ('эффекты: план по событиям', test_plan), ('эффекты мира: метки, acts, фактура', test_world_plan),
+                     ('клипы мира: мягкие', test_clips_soft),
+                     ('без голоса: область ключа', test_without_voice_scope)):
         print(name)
         try:
             fn()
@@ -201,6 +335,12 @@ def main():
         tmp = tempfile.mkdtemp(prefix='t04-', dir=tmp_root)
         try:
             test_end_to_end(tmp)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+        print('сквозной прогон: фильм без голоса')
+        tmp = tempfile.mkdtemp(prefix='t04m-', dir=tmp_root)
+        try:
+            test_music_only(tmp)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
     print('итог: %s' % ('всё зелёное' if not FAILS else 'красных %d' % len(FAILS)))

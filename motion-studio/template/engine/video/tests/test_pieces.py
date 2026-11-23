@@ -10,6 +10,8 @@
   - `--frames N` без `--png` — отказ (mp4 из части кадров был бы короче звука).
 Работает на копии project/ во временной папке; поставка не трогается. Нужен engine/video/node_modules.
 """
+NEEDS_CHROME = True      # тест запускает безголовый браузер: общий прогон берёт на него замок и не зовёт в --quick
+
 import json
 import os
 import shutil
@@ -50,8 +52,10 @@ def _proj():
 
 
 def _frames(proj):
-    d = proj / 'out' / 'demo' / 'frames'
-    return sorted(p.name for p in d.glob('frame_*.png')) if d.is_dir() else []
+    """Имена кадров куска по порядку номеров; раскладку внутри frames/ знает engine/video/stamp.py."""
+    sys.path.insert(0, str(VIDEO))
+    import stamp
+    return [os.path.basename(p) for p in stamp.frame_files(str(proj / 'out' / 'demo'))]
 
 
 def test_png_piece_has_frames_and_stamp():
@@ -64,6 +68,15 @@ def test_png_piece_has_frames_and_stamp():
     st = json.loads(sp.read_text(encoding='utf-8'))
     check(st.get('frames') == N and st.get('full', 0) > N, 'отметка не называет пробный кусок: %s' % st)
     check(not (proj / 'out' / 'demo' / 'video.mp4').exists(), '--png собрал mp4')
+
+
+def test_piece_frames_lie_by_scene():
+    """Кэш кадров — по сценам (interfaces сборки, «Рендер»): frames/<сцена>/frame_%06d.png, номера сквозные по фильму."""
+    proj = _proj()
+    d = proj / 'out' / 'demo' / 'frames' / 'demo-a'
+    got = sorted(p.name for p in d.glob('frame_*.png')) if d.is_dir() else []
+    check(got == ['frame_%06d.png' % (k + 1) for k in range(N)],
+          'первые %d кадров демо не лежат в frames/demo-a/: %s' % (N, got))
 
 
 def test_page_rebuild_keeps_frames_and_piece_is_taken():

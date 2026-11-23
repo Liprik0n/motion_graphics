@@ -16,11 +16,10 @@
 // элементов без трансформаций (els0), части видов (kinds), move (рамка якоря и цели), levelTrace —
 // каждый кадр окна каждого уровня (непрозрачность держателей текста), правило округления (round_rule).
 // Проверка читает только этот файл.
-import { createServer } from 'node:http';
-import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
-import { join, extname, resolve } from 'node:path';
-import { homedir } from 'node:os';
-import puppeteer from 'puppeteer-core';
+// Сервер страницы, Chrome (chromePath() из chrome_path.mjs), ожидание шрифтов и таймлайна — общий модуль probe_page.mjs.
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { serve, launch, openPage } from './probe_page.mjs';      // страница для промера — одно правило на все промеры
 
 const outDir = resolve(process.argv[2] || '.');
 const film = JSON.parse(readFileSync(join(outDir, 'film.json'), 'utf8'));
@@ -28,24 +27,6 @@ const fps = film.fps;
 // ОДНО правило округления времени в кадр на промер, сборку и проверку: floor(t*fps + 0,5 + 0,005).
 const frameOf = (t) => Math.floor(t * fps + 0.5 + 5e-3);
 const q = (t) => Math.max(0, Math.min(film.duration - 1 / fps, frameOf(t) / fps));
-
-function chromePath() {
-  if (process.env.CHROME_PATH) return process.env.CHROME_PATH;
-  const base = join(homedir(), '.cache', 'hyperframes', 'chrome', 'chrome-headless-shell');
-  if (existsSync(base)) {
-    for (const v of readdirSync(base).sort().reverse()) {
-      for (const [dir, exe] of [['chrome-headless-shell-win64', 'chrome-headless-shell.exe'],
-        ['chrome-headless-shell-linux64', 'chrome-headless-shell'], ['chrome-headless-shell-mac-arm64', 'chrome-headless-shell'],
-        ['chrome-headless-shell-mac-x64', 'chrome-headless-shell']]) {
-        const p = join(base, v, dir, exe);
-        if (existsSync(p)) return p;
-      }
-    }
-  }
-  const sys = join(process.env.PROGRAMFILES || '', 'Google', 'Chrome', 'Application', 'chrome.exe');
-  if (existsSync(sys)) return sys;
-  throw new Error('Нет Chrome: npx hyperframes browser ensure (в engine/video) или задай CHROME_PATH');
-}
 
 const times = new Set();
 for (const r of film.replies) for (const t of [r.start + 2 / fps, (r.start + r.end) / 2, r.end - 2 / fps]) times.add(q(t));
@@ -65,36 +46,15 @@ for (let i = 0; i + 1 < film.scenes.length; i++) {
 }
 const list = [...times].sort((a, b) => a - b);
 
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.png': 'image/png',
-  '.svg': 'image/svg+xml', '.ttf': 'font/ttf', '.otf': 'font/otf', '.woff2': 'font/woff2', '.css': 'text/css' };
-const server = createServer((req, res) => {
-  const p = join(outDir, decodeURIComponent(req.url.split('?')[0]).replace(/^\/+/, '') || 'index.html');
-  if (!p.startsWith(outDir) || !existsSync(p)) { res.writeHead(404); res.end(); return; }
-  res.writeHead(200, { 'Content-Type': MIME[extname(p)] || 'application/octet-stream' });
-  res.end(readFileSync(p));
-});
-await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
-const port = server.address().port;
-
-const browser = await puppeteer.launch({ executablePath: chromePath(), headless: true, protocolTimeout: 1800000,
-  args: ['--no-sandbox', '--disable-gpu', '--hide-scrollbars'] });
+const { server, url } = await serve(outDir);
+const browser = await launch();
 try {
-  const page = await browser.newPage();
-  await page.setViewport({ width: film.canvas.w, height: film.canvas.h, deviceScaleFactor: 1 });
   const errors = [];
-  page.on('pageerror', (e) => errors.push(String(e)));
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-  page.on('requestfailed', (r) => errors.push('request failed: ' + r.url()));
-  await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'load' });
-  await page.evaluate(() => document.fonts.ready);
+  const page = await openPage(browser, url, film.canvas, { errors,
+    listen: (pg) => pg.on('requestfailed', (r) => errors.push('request failed: ' + r.url())) });
   // статус каждого @font-face: шрифт проекта обязан быть loaded (файл, который Chrome отверг, — error)
   const fonts = await page.evaluate(() => [...document.fonts].map((f) => ({
     family: f.family.replace(/^["']|["']$/g, ''), weight: f.weight, status: f.status })));
-  try {
-    await page.waitForFunction(() => !!(window.__timelines && window.__timelines.main), { timeout: 10000, polling: 100 });
-  } catch (e) {
-    throw new Error('Таймлайн не зарегистрирован: ' + e.message + '\nОшибки страницы:\n' + errors.join('\n'));
-  }
   const samples = await page.evaluate((list, moves, sats, flashes) => {
     const F = window.__FILM__, tl = window.__timelines.main;
     const root0 = document.getElementById('root').getBoundingClientRect();

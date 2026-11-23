@@ -17,11 +17,13 @@
  "lead_sec": 0.6,
  "tail_sec": 0.6,
  "scene_exit_delay": 0.1,
+ "render": {"workers": "auto", "frame_budget_ms": 300, "draft": {"scale": 0.5, "fps": 15},
+  "_comment": "Рендер (engine/video/build.py): workers — воркеры захвата, \"auto\" (по ядрам и свободной памяти машины) или число 1–24; ключ --workers сильнее. frame_budget_ms — бюджет времени на кадр: сцена, которая снимается дольше, получает в render.log строку «ТРЕВОГА» (ищи большие размытия и тени); свой порог — по замеру своей машины, строки «сцена <id>: <N> кадров, <X> мс/кадр» там же. draft — черновик (--draft): scale — доля размера кадра, fps — кадров в секунду; финальный рендер от них не зависит."},
  "wall_clock": {"start": "2030-01-15T18:00:00+03:00", "lead_sec": 600.0, "event": "2030-01-16T00:00:00+03:00",
   "_comment": "Настенное время ролика (плагины timer и clock, engine/video/wallclock.py): start — когда ролик начинают смотреть (ISO 8601 с поясом — обязателен); lead_sec — сколько секунд идёт до первого кадра склейки (то, что смотрят перед роликом; 0 — ролик идёт первым); event — момент события, к которому считает таймер. Смещение куска в склейке — films/<f>.json timeline_offset_sec. Сдвинулся старт — правится только start, пересобирается кусок с таймером или часами и склейка. Здесь — значения демо-фикстур."},
  "fonts": [
   {"role": "digits", "family": "Demo Digits", "files": {"700": "assets/fonts/LiberationSansNarrow-Bold.ttf"},
-   "note": "Роль шрифта проекта сверх фирменного (tokens.json fonts → brand): цифры таймера и часов демо-фикстур. Тот же файл демо-шрифта (Liberation Sans Narrow) под своим именем семейства; свой шрифт — путь от корня проекта, перед Chrome прогнать engine/video/tools/fix_font.py. Роль даёт CSS-переменную --font-digits; повтор роли из tokens.json — отказ сборки."}
+   "note": "Роль шрифта проекта сверх фирменного (tokens.json fonts → brand): цифры таймера и часов демо-фикстур. Тот же файл демо-шрифта (Liberation Fonts license: GNU GPL v2 с исключением для шрифтов; текст — engine/video/assets/fonts/LICENSE-LiberationSansNarrow.txt) под своим именем семейства; свой шрифт — путь от корня проекта, перед Chrome прогнать engine/video/tools/fix_font.py. Роль даёт CSS-переменную --font-digits; повтор роли из tokens.json — отказ сборки."}
  ],
  "legibility_except": [
   {"el": "act-sign:sign-dim", "max_opacity": 0.3, "min_visible": 0.05, "min_visible_sec": 2.0,

@@ -98,6 +98,8 @@
   var wins = WORLD && FRAMED ? C.textWindows(api, FILM, NAME, { parent: layer, pad: P.win_pad_px, css: { border: '4px solid ' + D.cloud_shade } }) : null;
   var anim = [];                       // {i (сцена) | -1, g, kind, x, y, t0, k, frames?}
   var hud = null, titleR = null;
+  // пиксельный шрифт-файл стиля (fonts.decor) в размере rows px: при rows = 8 буква Press Start 2P — ровно 8×8 клеток
+  function pxFont(rows) { return rows + 'px ' + C.fontOf(NAME, 'decor'); }
 
   function steppedRect(x, y, w, h, n) {  // прямоугольник со ступенчатыми углами (n клеток)
     var d = 'M' + (x + n * U) + ' ' + y + 'H' + (x + w - n * U);
@@ -193,8 +195,8 @@
     }), C.svg('g', {}, svg), function (g, text, box) {
       var cell = P.title_cell, r;
       for (;;) {
-        var sh = C.pixelText(g, text, box.x + cell, box.y + 2 + cell, { rows: P.title_rows, cell: cell, color: D.title_shade });
-        r = C.pixelText(g, text, box.x, box.y + 2, { rows: P.title_rows, cell: cell, color: D.title });
+        var sh = C.pixelText(g, text, box.x + cell, box.y + 2 + cell, { rows: P.title_rows, cell: cell, color: D.title_shade, font: pxFont(P.title_rows) });
+        r = C.pixelText(g, text, box.x, box.y + 2, { rows: P.title_rows, cell: cell, color: D.title, font: pxFont(P.title_rows) });
         if (r.w + cell <= box.w || cell <= P.title_cell_min) break;
         g.removeChild(sh.g); g.removeChild(r.g); cell -= 1;
       }
@@ -367,7 +369,7 @@
       return function (t) { return upTo(keys.length, t); };
     }
     var kit = { U: U, snap: snap, svg: C.svg, px: px, rect: rect, art: ART, house: house, garland: garland, taxi: taxi, disk: disk,
-                text: C.pixelText, track: track, rng: C.rng, hash: C.hash, decor: D, pal: KP,
+                text: function (parent, str, x, y, o) { return C.pixelText(parent, str, x, y, Object.assign({ font: pxFont((o && o.rows) || 8) }, o || {})); }, track: track, rng: C.rng, hash: C.hash, decor: D, pal: KP,
                 step: function (t) { return api.stepTime(t, P.step_frames); },
                 at: function (anchor) { return C.when(FILM, anchor); },      // якорь {reply, at, offset} → секунды фильма
                 cues: function (scene) { return C.cues(FILM, scene); },      // метки act сцены: {id, t, who, do, m, span}
@@ -393,10 +395,10 @@
       var score = String(P.hud_score + 10 * Math.max(0, Math.floor(ts / P.hud_step_sec)));
       while (score.length < 6) score = '0' + score;
       var hv = 'СЧЁТ ' + score + '    МОНЕТЫ 08    ЖИЗНИ 3';
-      if (hud.v !== hv) {
+      if (hud.v !== hv || !hud.final) {         // и заново, пока шрифт-файл не загрузился (StyleCore.fontsReady)
         while (hud.g.firstChild) hud.g.removeChild(hud.g.firstChild);
-        C.pixelText(hud.g, hv, 3 * U, 3 * U, { rows: P.hud_rows, cell: P.hud_cell, color: D.hud });
-        hud.v = hv;
+        C.pixelText(hud.g, hv, 3 * U, 3 * U, { rows: P.hud_rows, cell: P.hud_cell, color: D.hud, font: pxFont(P.hud_rows) });
+        hud.v = hv; hud.final = C.fontsReady();
       }
       anim.forEach(function (it) {
         var sw = it.i < 0 ? 1 : api.sceneWeight(it.i, t);

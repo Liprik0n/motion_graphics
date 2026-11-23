@@ -18,23 +18,9 @@
   "steel_dark": "#4A5266"
  },
  "fonts": {
-  "title": {
-   "family": "Impact",
-   "files": [
-    "impact.ttf",
-    "ariblk.ttf"
-   ],
-   "weight": 400,
-   "note": "плакатный гротеск, системный Windows (кириллица проверяется сборкой); нет файла — заголовок фирменным"
-  },
-  "decor": {
-   "family": "Impact",
-   "files": [
-    "impact.ttf",
-    "ariblk.ttf"
-   ],
-   "weight": 400
-  }
+  "title": {"family": "Oswald", "files": ["Oswald-wght.ttf"], "weight": 700,
+             "note": "плакатный узкий гротеск, файл движка под OFL (assets/fonts/README.md); свой шрифт — файлом в <проект>/assets/fonts, первым в files"},
+  "decor": {"family": "Oswald", "files": ["Oswald-wght.ttf"], "weight": 700}
  },
  "objects": [
   "rays",

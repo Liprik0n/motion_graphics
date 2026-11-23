@@ -83,7 +83,7 @@
                            'data-dash': o.dash || '' }, g);
   }
   function note(g, x, y, str, size) {
-    var t = C.text(g, x, y, str, { fill: D.graphite, 'font-size': String(size || 18) });
+    var t = C.text(g, x, y, str, { fill: D.graphite, 'font-size': String(size || 24) });
     t.style.fontFamily = cfg.fonts.decor || cfg.fonts.title;
     return t;
   }
@@ -98,7 +98,7 @@
       out.push(P_(g, 'M' + [r[0], r[1]] + ' L' + [a[0], a[1]] + ' L' + [a[0], a[1] + h] + ' L' + [r[0], r[1] + h] + ' Z',
                   { fill: hatchFill, w: 0.6 }));
       out.push(P_(g, 'M' + [x + 4, top + h * 1.25] + ' L' + [x + s - 4, top + h * 1.25], { w: 1, dash: '6 6' }));
-      note(g, x + s * 0.08, y + s * 0.95, 'перспектива, 2 точки', Math.max(13, s * 0.075));
+      note(g, x + s * 0.08, y + s * 0.95, 'перспектива, 2 точки', Math.max(17, s * 0.1));
       void b;
       return out;
     },
@@ -152,7 +152,7 @@
       var o = [P_(g, 'M' + [x + s * 0.1, y + s * 0.3] + ' C' + [x + s * 0.5, y + s * 0.1] + ' ' + [x + s * 0.8, y + s * 0.4] + ' '
                   + [x + s * 0.78, y + s * 0.8]),
                P_(g, 'M' + [x + s * 0.66, y + s * 0.68] + ' L' + [x + s * 0.78, y + s * 0.82] + ' L' + [x + s * 0.88, y + s * 0.66])];
-      note(g, x + s * 0.02, y + s * 0.2, 'смотри сюда', Math.max(13, s * 0.09));
+      note(g, x + s * 0.02, y + s * 0.2, 'смотри сюда', Math.max(17, s * 0.12));
       return o;
     }
   };

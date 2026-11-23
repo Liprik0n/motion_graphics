@@ -1,0 +1,42 @@
+<!-- Демо ролика без голоса, сцена 2: заголовок, три столбика и линейка. Цвета — только переменные палитры. -->
+<div class="el" id="head" style="left:360px; top:100px; width:1200px; height:140px;">
+  <span class="t" style="display:block; width:1200px; line-height:140px; text-align:center; font-size:96px; font-weight:700; color:var(--c-ink); white-space:nowrap;">Ещё четыре</span>
+</div>
+<div class="el" id="bars" style="left:560px; top:300px; width:800px; height:410px;">
+  <div class="bar" style="position:absolute; left:40px; top:300px; width:200px; height:60px; background:var(--c-primary);"></div>
+  <div class="bar" style="position:absolute; left:300px; top:300px; width:200px; height:60px; background:var(--c-primary);"></div>
+  <div class="bar" style="position:absolute; left:560px; top:300px; width:200px; height:60px; background:var(--c-accent);"></div>
+  <span class="t" style="position:absolute; left:0; top:364px; width:800px; line-height:44px; text-align:center; font-size:32px; color:var(--c-text); white-space:nowrap;">рост по тактам</span>
+</div>
+<div class="el" id="ruler" style="left:560px; top:850px; width:800px; height:100px;">
+  <span class="t" style="position:absolute; left:0; top:0px; width:800px; line-height:44px; text-align:center; font-size:32px; color:var(--c-text); white-space:nowrap;">ход такта</span>
+  <div class="track" style="position:absolute; left:0; top:60px; width:800px; height:36px; background:var(--c-primary_pale);"></div>
+  <div class="fill" style="position:absolute; left:0; top:60px; width:0; height:36px; background:var(--c-highlight);"></div>
+</div>
+<script>
+/* Заголовок стоит на 8 px ниже и оседает на место за span метки enter; столбик i растёт с метки rise(i) за span (высота 60 → 140, 180, 300); линейка идёт 0 → 1 за такт */
+(window.ActExec = window.ActExec || []).push(
+  { scene: 'silent-b', who: 'head', run: function (t, cues) {
+      var s = document.getElementById('silent-b--head').querySelector('.t');
+      var c = cues[0];
+      s.style.transform = 'translateY(' + (c && c.local >= 0 ? 8 * (1 - c.e) : 8).toFixed(2) + 'px)';
+  } },
+  { scene: 'silent-b', who: 'bars', run: function (t, cues) {
+      var bars = document.getElementById('silent-b--bars').querySelectorAll('.bar');
+      var to = [140, 180, 300];
+      for (var i = 0; i < bars.length; i++) { bars[i].style.height = '60px'; bars[i].style.top = '300px'; }
+      cues.forEach(function (c) {
+        if (c.local < 0) return;
+        var h = 60 + (to[c.cue.idx] - 60) * c.e;
+        var b = bars[c.cue.idx];
+        b.style.height = h.toFixed(1) + 'px';
+        b.style.top = (360 - h).toFixed(1) + 'px';
+      });
+  } },
+  { scene: 'silent-b', who: 'ruler', run: function (t, cues) {
+      var f = document.getElementById('silent-b--ruler').querySelector('.fill');
+      var c = cues[0];
+      var x = c && c.local >= 0 ? (c.local % 2.0) / 2.0 : 0;
+      f.style.width = (800 * x).toFixed(1) + 'px';
+  } });
+</script>

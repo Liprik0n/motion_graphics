@@ -9,15 +9,20 @@
   "margin": "#E07A6E", "film": "#1E1E1E", "hole": "#D8D4CA", "shadow": "#8A857A"
  },
  "fonts": {
-  "title": {"kind": "code", "note": "заголовок рисует plugin.js: каждая буква вырезана из «своего журнала» — плашка своего цвета, системный шрифт из params.cut_fonts (Impact, Georgia, Arial Black, Courier New, Times New Roman, Comic Sans MS — все с кириллицей), поворот и сдвиг от сида"},
-  "decor": {"family": "Courier New", "files": ["courbd.ttf", "consolab.ttf"], "weight": 700}
+  "title": {"kind": "code", "note": "заголовок рисует plugin.js: каждая буква вырезана из «своего журнала» — плашка своего цвета, шрифт — одна из ролей params.cut_fonts (файлы движка под OFL, assets/fonts/README.md; все с кириллицей), поворот и сдвиг от сида"},
+  "decor": {"family": "IBM Plex Mono", "files": ["IBMPlexMono-Bold.ttf"], "weight": 700},
+  "cut_antiqua": {"family": "Old Standard TT", "files": ["OldStandard-Bold.ttf"], "weight": 700},
+  "cut_grotesk": {"family": "Golos Text", "files": ["GolosText-wght.ttf"], "weight": 900},
+  "cut_hand": {"family": "Comic Relief", "files": ["ComicRelief-Bold.ttf"], "weight": 700},
+  "cut_poster": {"family": "Oswald", "files": ["Oswald-wght.ttf"], "weight": 700},
+  "cut_serif": {"family": "PT Serif", "files": ["PT_Serif-Web-Bold.ttf"], "weight": 700}
  },
  "objects": ["noise", "bolt", "note", "stamp", "star", "photo", "tape", "airmail", "film-scrap"],
  "params": {
   "win_pad_px": 14,
   "paper_alpha": 0.09, "paper_seed": 71,
   "airmail_y_px": 10, "airmail_h_px": 18, "airmail_seg_px": 26,
-  "cut_fonts": ["Impact", "Georgia", "Arial Black", "Courier New", "Times New Roman", "Comic Sans MS"],
+  "cut_fonts": ["cut_poster", "cut_serif", "cut_grotesk", "decor", "cut_antiqua", "cut_hand"],
   "cut_size_px": 50, "cut_tile_h_px": 58, "cut_pad_px": 7, "cut_rot_deg": 5, "cut_dy_px": 2, "cut_space_px": 16,
   "tilt_deg": 7, "wobble_deg": 0.7, "slap_scale": 0.35, "slap_sec": 0.3, "enter_from": 0.25, "enter_gap": 0.22,
   "tape_w_px": 96, "tape_h_px": 28, "tape_alpha": 0.82, "lock_tape_role": "line",

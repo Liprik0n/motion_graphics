@@ -1,6 +1,7 @@
 /* Комикс, режим «мир»: заголовок — плакатным гротеском (--sty-comic-title объявляет сборка), цвет — роль бренда;
    карточки и плашки — в чёрной обводке комикса с жёсткой тенью (decor.ink). */
-#root[data-style="comic"] .fr-title { font-family: var(--sty-comic-title); font-size: 54px; letter-spacing: 1px; }
+/* кегль 46 px: у плакатного шрифта (Oswald) строка 1,48 кегля — так она помещается в рамку заголовка каркаса (V10) */
+#root[data-style="comic"] .fr-title { font-family: var(--sty-comic-title); font-size: 46px; letter-spacing: 1px; }
 .scene[data-style="comic"] .k-card,
 .scene[data-style="comic"] .k-plaque,
 .scene[data-style="comic"] .k-box { box-shadow: 0 0 0 4px #151515, 9px 9px 0 4px #151515; }

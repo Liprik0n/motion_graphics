@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 """Общее для тестов движка: пути, питон, мини-раннер без pytest (на машине его нет).
 
-Тест — файл engine/tests/test_*.py с функциями test_*(); запуск одного файла — `python engine/tests/test_<имя>.py`,
-всех — `python engine/tools/check_all.py`. Каждая функция печатает строку ok / FAIL; код выхода 1 при провале.
+Тест — файл test_*.py с функциями test_*(); запуск одного файла — `python engine/tests/test_<имя>.py`, всех тестов
+движка — `python <скил>/tools/check_skill.py` (в своей копии движка — `python engine/tools/check_all.py --engine`).
+Регистрировать тест нигде не надо: его находят обходом; тесту с браузером нужна строка `NEEDS_CHROME = True`.
+Каждая функция печатает строку ok / FAIL; код выхода 1 при провале.
 """
 import os
 import sys

@@ -8,11 +8,14 @@
 способом: длительности — промером звука, геометрия — промером DOM, ожидания — числа конфигов.
 
     python engine/video/check.py demo --page          страница без рендера (build.py demo --page): видео не смотрим
-    python engine/video/check.py demo                 ролик целиком: + video.mp4
+    python engine/video/check.py demo                 ролик целиком: + video.mp4 (V1 красная, если ролик снят не с
+                                                      нынешней страницы: отметка кадров, engine/video/stamp.py)
     python engine/video/check.py film --only a,b --page   пара сцен — шов без рендера
     python engine/video/check.py demo --red [подстрока]       быстрые порчи (probe.json и копии данных), секунды
     python engine/video/check.py demo --red-slow [подстрока]  медленные порчи: копия проекта, пересборка страницы
     python engine/video/check.py demo --samples [подстрока]   законные варианты на грани порога — молча
+    python engine/video/check.py <фильм> --red-init           завести порчи своего фильма: checks/red_<фильм>.py с рабочим
+                                                              минимумом (порчи глаза V36, V37 — checks/red_film.py)
     python engine/video/check.py demo --page --style glass    проход фильма в стиле (build.py demo --page --style glass
                                                               → <out>/demo/glass/; то же, что check.py demo/glass --page);
                                                               с --red / --samples — порчи «стиль на фильме роняет
@@ -21,7 +24,10 @@
     --out-dir DIR   собранная страница не в <out>/<фильм>
 
 Код выхода 0 — всё зелёное, 1 — хоть один провал (или порча не покраснела своей строкой).
-Условия V1–V35 и их карта на классы дефектов — engine/video/CHECKS.md.
+Условия V1–V37 и их карта на условия прошлого ролика и классы дефектов — engine/video/CHECKS.md.
+V36 и V37 (живость по зонам, читаемость по пикселям) при первом запуске на странице снимают её кадры (Chrome под
+замком, engine/tools/strip.py) в <out>/<фильм>/strips/_cache/; дальше берут их оттуда, пока страница та же
+(отпечаток stamp.page_print: index.html, film.json и каждый файл assets/).
 """
 import copy
 import json
@@ -37,6 +43,9 @@ sys.stderr.reconfigure(encoding='utf-8')
 
 HERE = os.path.dirname(os.path.abspath(__file__))           # <шаблон>/engine/video
 ENGINE = os.path.dirname(HERE)                               # <шаблон>/engine
+if HERE not in sys.path:
+    sys.path.insert(0, HERE)
+import stamp      # noqa: E402  отпечаток страницы и отметка кадров: одно правило «та же ли это страница» со сборкой
 
 # ---------------------------------------------------------------- пороги проверки (замер прошлого ролика, не конфиг проекта)
 EDGE_TOL = 0.5            # px: допуск округления прямоугольников
@@ -417,7 +426,8 @@ def manifest_rows(ctx):
 # ================================================================= условия
 def v1_duration(ctx):
     """V1: видео = звук ±1 кадр; длина = конец последней реплики + хвост (или конец последнего
-    бита + beat_tail); промер и проверка округляют время в кадр одним правилом; страница без ошибок."""
+    бита + beat_tail); промер и проверка округляют время в кадр одним правилом; страница без ошибок. Без --page —
+    ролик снят с нынешней страницы: отметка его кадров не устарела (stamp.stale пуст)."""
     f, film, F = [], ctx['film'], FR(ctx)
     tail = ctx['fdef']['tail_sec'] if 'tail_sec' in ctx['fdef'] else cfg_need(ctx, 'project', 'tail_sec')
     if ctx.get('page_only'):
@@ -425,6 +435,13 @@ def v1_duration(ctx):
     else:
         if not os.path.exists(ctx['mp4']):
             return ['V1 длительность: нет %s — собери ролик или проверяй с --page' % ctx['mp4']]
+        # ролик снят с кадров frames/, а страницу после рендера могли пересобрать другой: правка сцены → --page →
+        # зелёная проверка страницы → в сдаче прежняя картинка. Отметку кадров пишет каждый полный рендер (stamp.py)
+        why = stamp.stale(ctx['out_dir'])
+        if why:
+            f.append('V1 ролик: %s снят не с нынешней страницы — %s. Проверка мерит страницу, а в сдачу уйдёт прежняя '
+                     'картинка; перерендерь: build.py %s' % (os.path.basename(ctx['mp4']), '; '.join(why),
+                                                            re.split(r'[\\/]', str(film['film']))[0]))
         vid, aud = mp4_streams(ctx['mp4'], fps(ctx))
         if vid is None or aud is None:
             return ['V1 длительность: в %s нет видео- или звуковой дорожки' % ctx['mp4']]
@@ -1521,11 +1538,18 @@ def _supports(ctx, smp, it):
     return False
 
 
+def _whole_canvas(ctx, r):
+    W, H = canvas(ctx)
+    return r[0] <= 0.5 and r[1] <= 0.5 and r[0] + r[2] >= W - 0.5 and r[1] + r[3] >= H - 0.5
+
+
 def v15_hanging(ctx):
     """V15 (новое, ретро класс 2 «висит в пустоте»): предмет — видимый элемент содержания без надписи
-    (иконка, фигура; кроме слоя under) — не дольше HANG_MAX подряд без опоры: ни рядом с надписью,
+    (иконка, фигура; кроме слоя under и хозяина букв «пером» — его надпись пишет плагин pen) — не дольше HANG_MAX
+    подряд без опоры: ни рядом с надписью,
     заливкой или линией каркаса, ни при видимом хозяине-надписи (спутник)."""
     f, decl = [], declared_layers(ctx)
+    pen_hosts = {'%s--%s' % (sc, c.get('who')) for sc, _sb, c in _act_cues(ctx, PEN_DO)}     # хозяин букв «пером» — надпись, не предмет
     runs = {}                      # id → [начало, последний t без опоры]
     worst = {}
     for smp in sorted(ctx['probe']['samples'], key=lambda s: s['t']):
@@ -1533,8 +1557,10 @@ def v15_hanging(ctx):
         for it in smp['items']:
             if it['kind'] != 'content' or it['opacity'] <= TEXT_SEEN or it.get('segs') or any(norm(x) for x in it['texts']):
                 continue
-            if decl.get(it['id']) == 'under' or (it.get('layer') or '') == 'under':
+            if decl.get(it['id']) == 'under' or (it.get('layer') or '') == 'under' or it['id'] in pen_hosts:
                 continue
+            if _whole_canvas(ctx, it['rect']):
+                continue                  # во всё полотно — мир сцены (холст), а не предмет: висеть ему негде
             if _supports(ctx, smp, it):
                 continue
             seen_now.add(it['id'])
@@ -1653,7 +1679,9 @@ def mention_pos(key, words):
 def v17_speech_order(ctx):
     """V17 (новое, ретро класс 14 «порядок на экране ≠ порядку в речи»): пункты сцены, которые речь называет
     (две первые значимые основы надписи подряд в тексте реплик сцены), становятся читаемыми (> 0,3) в том же
-    порядке, в каком их называет речь."""
+    порядке, в каком их называет речь. Фильм без речи (все строки немые, silent) — SKIP."""
+    if ctx['film'].get('replies') and all(r.get('silent') for r in ctx['film']['replies']):
+        return None
     f = []
     rows = speech_rows(ctx)
     appear = {}
@@ -2010,7 +2038,7 @@ PROP_NAME = {'bg': 'background', 'font': 'font-family', 'weight': 'font-weight',
 
 
 def v22_brand(ctx):
-    """V22 (новое, spec история 45 «стиль — целый мир»; catalog/styles.md «Бренд главнее»). Всегда: --c-<роль>
+    """V22 (catalog/styles.md «Бренд главнее»). Всегда: --c-<роль>
     на странице = tokens.json palette; на содержании и его предках нет перекрашивающих фильтров (sepia,
     hue-rotate, saturate, grayscale, invert, contrast, brightness; в SVG-фильтре — только смещение, шум и
     размытие) и режима смешения.
@@ -2208,7 +2236,7 @@ def v23_flashes(ctx):
 
 
 def v24_determinism(ctx):
-    """V24 (закон 1 — кадр есть функция времени): стиль детерминирован — кадр t из первой загрузки страницы
+    """V24: стиль детерминирован — кадр t из первой загрузки страницы
     и тот же кадр после перезагрузки, снятый в обратном порядке после постороннего кадра, совпадают попиксельно
     (допуск DET_PIX). Случайность стиля — только сид от номера кадра и id, не Math.random и не время."""
     sp, miss = style_need(ctx, 'V24 детерминизм стиля')
@@ -2871,6 +2899,577 @@ def v35_dim_sign(ctx):
     return f
 
 
+# ---------------------------------------------------------------- глаз (V36, V37): кадры полосы и области текста
+# Пороги — tokens.json density.max_static, density.zones, legibility.pixel (их выбирает проект); здесь — только
+# устройство промера:
+EYE_SCALE = 1.0           # кадры полосы — в полный размер холста: штрих буквы обязан остаться штрихом
+EYE_ZONE_W = 480          # px: к этой ширине уменьшается кадр для разности зон (усреднение гасит дрожь сглаживания)
+EYE_INK_TAIL = 0.02       # V37: светлый и тёмный край клетки строки — 98-й и 2-й процентили яркости её пикселей
+EYE_MIN_PX = 10           # px кадра полосы: строка ниже или уже этого не мерится (штрих тоньше пикселя)
+EYE_TEXT_FILE = 'text.json'
+EYE_OFF = 'не мерено — кадры полосы для этой порчи не снимались'
+
+
+def eye(ctx):
+    """Что видит глаз, для V36 и V37: {step, scale, frames: [{t, file, text: [строка, …]}]} — кадры страницы через
+    density.zones.step_sec секунд (engine/tools/strip.py frames, полный размер) и строки текста в каждом из них
+    (checks/probe_text.mjs): надписи DOM {src: 'dom', id, k, scene, o, covered, text, rect} и области, которые сцена
+    объявила сама, {src: 'canvas', id, text, rect, opacity} (window.__textRects, lib/stage.js). Снимается один раз
+    на страницу: кэш полосы <out>/<фильм>/strips/_cache/ по отпечатку страницы (stamp.page_print), второй запуск
+    Chrome не зовёт.
+    Порчи и образцы подменяют кадры и строки в своей копии ctx['eye']; ctx['eye'] = False выключает промер (None)
+    — V36 и V37 тогда пишут SKIP «не мерено»: так делают медленные порчи других проверок на копии страницы."""
+    if ctx.get('eye') is False:           # медленная порча другой проверки на копии страницы: кадры не снимаются
+        return None
+    if ctx.get('eye') is None:
+        ctx['eye'] = eye_probe(ctx)
+    return ctx['eye']
+
+
+def eye_probe(ctx):
+    """Снять кадры и области текста страницы (или взять снятые). Замок Chrome берётся один раз на оба промера и
+    только когда снимать есть что: отметка <out>/<фильм>/strips/_cache/eye-<отпечаток страницы>.json называет файлы
+    прошлого промера этой же страницы с тем же шагом. «Та же страница» — отпечаток stamp.page_print: index.html,
+    film.json и каждый файл assets/ (картинка-кадр или шрифт, заменённые под тем же именем, кадр меняют)."""
+    import hashlib
+    import tempfile
+    for d in (ENGINE, os.path.join(ENGINE, 'tools')):
+        if d not in sys.path:
+            sys.path.append(d)
+    import chrome_lock
+    import strip
+    film = ctx['film']
+    step = float(cfg_need(ctx, 'tokens', 'density.zones.step_sec'))
+    if step <= 0:
+        raise SystemExit('tokens.json density.zones.step_sec = %s: шаг кадров — положительное число секунд' % step)
+    name = str(film['film']).replace('\\', '/').split('/')[0]
+    film_fps = float(film['fps'])
+    page = stamp.page_print(ctx['out_dir'])
+    if page is None:
+        raise SystemExit('ОШИБКА: в %s нет собранной страницы (index.html, film.json) — кадры для V36 и V37 снимать не с чего'
+                         % ctx['out_dir'])
+    sha = hashlib.sha256(json.dumps(page, sort_keys=True).encode('utf-8'))
+    cache = os.path.join(str(strip.out_root(ctx['root'])[1]), name, 'strips', '_cache')
+    mark = os.path.join(cache, 'eye-%s-%s-%s.json' % (sha.hexdigest()[:20], step, EYE_SCALE))
+    got = load_json(mark) if os.path.exists(mark) else None
+    if not got or not all(os.path.exists(x) for x in got['frames'] + [got['text']]):
+        with chrome_lock.held('check.py V36/V37 кадры и текст %s' % ctx['out_dir']):
+            paths = strip.frames(ctx['root'], name, 0.0, float(film['duration']), 1.0 / step, EYE_SCALE, page=ctx['out_dir'])
+            text_file = os.path.join(os.path.dirname(paths[0]), EYE_TEXT_FILE)
+            if not os.path.exists(text_file):                 # иначе области этой полосы уже сняты
+                fd, job_path = tempfile.mkstemp(prefix='eye-job-', suffix='.json')
+                tmp_out = text_file + '.part'
+                try:
+                    with os.fdopen(fd, 'w', encoding='utf-8') as fh:
+                        json.dump({'frames': [frame_of(ctx, k * step) for k in range(len(paths))], 'file': tmp_out}, fh)
+                    r = subprocess.run(['node', os.path.join(HERE, 'checks', 'probe_text.mjs'), ctx['out_dir'], job_path],
+                                       capture_output=True, text=True, encoding='utf-8', errors='replace')
+                    if r.returncode != 0 or not os.path.exists(tmp_out):
+                        raise SystemExit('ОШИБКА: промер областей текста не удался (probe_text.mjs, код %d): %s'
+                                         % (r.returncode, (r.stderr or r.stdout).strip()[-400:]))
+                    os.replace(tmp_out, text_file)
+                finally:
+                    os.remove(job_path)
+                    if os.path.exists(tmp_out):
+                        os.remove(tmp_out)
+        got = {'frames': paths, 'text': text_file}
+        with open(mark, 'w', encoding='utf-8') as fh:
+            json.dump(got, fh, ensure_ascii=False)
+    paths, data = got['frames'], load_json(got['text'])
+    if len(data.get('frames') or []) != len(paths):
+        raise SystemExit('ОШИБКА: промер областей текста (%s) не сходится с полосой кадров: %d против %d — удали '
+                         'папку %s и повтори' % (got['text'], len(data.get('frames') or []), len(paths), cache))
+    frames = []
+    for k, (p, fr) in enumerate(zip(paths, data['frames'])):
+        text = [dict(ln, src='dom') for ln in fr.get('dom') or []]
+        if fr.get('canvas_error'):
+            text.append({'src': 'canvas', 'error': fr['canvas_error']})
+        for ln in fr.get('canvas') or []:
+            text.append(dict(ln, src='canvas') if isinstance(ln, dict) else {'src': 'canvas', 'error': 'не объект: %r' % (ln,)})
+        frames.append({'t': round(k * step, 4), 'file': p, 'text': text})
+    return {'step': step, 'scale': EYE_SCALE, 'frames': frames}
+
+
+def note(ctx, code, text):
+    """Приписка к строке OK проверки: что она не мерила и почему (сцена, где нечего мерить)."""
+    ctx.setdefault('_notes', {})[code] = text
+
+
+def when_t(ctx, w):
+    """Секунды фильма для момента раскадровки {reply, at, offset}; None — реплики нет в этой сборке."""
+    r = reply_of(ctx, w['reply'])
+    if r is None:
+        return None
+    return r['start'] + float(w['at']) * (r['end'] - r['start']) + float(w.get('offset', 0.0))
+
+
+def still_spans(ctx):
+    """({сцена: [(t0, t1, зачем)]}, [строки провала]) — законные паузы раскадровок: поле still {from, to, why}
+    (одна пауза объектом или список). Пауза, у которой конец не позже начала, — провал: она ничего не объявляет."""
+    spans, bad = {}, []
+    for s, sb in storyboards(ctx, raw=True):
+        st = sb.get('still')
+        for sp in ([st] if isinstance(st, dict) else st or []):
+            t0, t1 = when_t(ctx, sp['from']), when_t(ctx, sp['to'])
+            if t0 is None or t1 is None:
+                continue
+            if t1 <= t0:
+                bad.append('V36 живость %s: пауза still «%s» кончается (%.2f с) не позже, чем начинается (%.2f с)'
+                           % (s['id'], sp.get('why', ''), t1, t0))
+                continue
+            spans.setdefault(s['id'], []).append((t0, t1, sp.get('why', '')))
+    return spans, bad
+
+
+def _eye_gray(path):
+    """Кадр полосы серым, уменьшенный до EYE_ZONE_W по ширине, — один раз на путь и время файла."""
+    from PIL import Image
+    st = os.stat(path)
+    key = ('gray', path, st.st_mtime_ns, st.st_size)
+    if key not in _IMG_CACHE:
+        im = Image.open(path).convert('L')
+        if im.size[0] > EYE_ZONE_W:
+            im = im.resize((EYE_ZONE_W, max(1, int(round(im.size[1] * EYE_ZONE_W / float(im.size[0]))))), Image.BOX)
+        _IMG_CACHE[key] = im
+    return _IMG_CACHE[key]
+
+
+def zone_shares(path_a, path_b, gx, gy, delta):
+    """Доля пикселей каждой зоны сетки gx×gy (по строкам, слева направо), у которых яркость между двумя кадрами
+    сменилась больше чем на delta полной шкалы."""
+    from PIL import ImageChops
+    key = ('zones', path_a, os.stat(path_a).st_mtime_ns, path_b, os.stat(path_b).st_mtime_ns, gx, gy, delta)
+    if key not in _IMG_CACHE:
+        a, b = _eye_gray(path_a), _eye_gray(path_b)
+        cut = int(math.floor(delta * 255)) + 1
+        d = ImageChops.difference(a, b).point(lambda v, cut=cut: 255 if v >= cut else 0)
+        w, h = d.size
+        out = []
+        if d.getbbox() is None:                 # кадры одинаковы — зоны не режем
+            out = [0.0] * (gx * gy)
+        else:
+            for j in range(gy):
+                for i in range(gx):
+                    box = (i * w // gx, j * h // gy, (i + 1) * w // gx, (j + 1) * h // gy)
+                    n = max(1, (box[2] - box[0]) * (box[3] - box[1]))
+                    out.append(d.crop(box).histogram()[255] / float(n))
+        _IMG_CACHE[key] = out
+    return _IMG_CACHE[key]
+
+
+def v36_need(limit, step):
+    """Сколько пар соседних кадров нужно зоне, чтобы V36 могла покраснеть: (пар движения, пар простоя). Слой — зона,
+    ехавшая без остановки не меньше limit; заморожен — после этого стоит дольше limit. Сцена, где пар кадров
+    меньше суммы, покраснеть не может при любой картинке: её называет строка V36."""
+    return int(math.ceil((limit - 1e-6) / step)), int(math.floor((limit + 1e-6) / step)) + 1
+
+
+def v36_alive_zones(ctx):
+    """V36 (новое, закон 8; ретро открытки B): живость по зонам — по кадрам страницы через density.zones.step_sec
+    секунд. Кадр режется сеткой density.zones.grid; зона сдвинулась между соседними кадрами, если яркость сменилась
+    больше чем на density.zones.delta хотя бы у доли min_share её пикселей. Зона, которая в сцене двигалась без
+    остановки не меньше density.max_static секунд, — движущийся слой; после этого ей нельзя стоять внутри сцены
+    дольше max_static: слой заморожен. Простой до первого такого движения не считается (зона ещё пуста или ждёт
+    своего входа). Законная пауза — поле раскадровки still {from, to, why} — простоем не считается.
+    Сцена, где ни одна зона так долго не двигалась (слайд, титр, сцена без героя), — нечего мерить.
+    Сцена короче двух порогов (v36_need) покраснеть не может вовсе — строка отчёта называет её и нужную длину."""
+    limit = float(cfg_need(ctx, 'tokens', 'density.max_static'))
+    gx, gy = [int(v) for v in cfg_need(ctx, 'tokens', 'density.zones.grid')]
+    share = float(cfg_need(ctx, 'tokens', 'density.zones.min_share'))
+    delta = float(cfg_need(ctx, 'tokens', 'density.zones.delta'))
+    ey = eye(ctx)
+    if ey is None:
+        note(ctx, 'V36', EYE_OFF)
+        return None
+    step, fr = float(ey['step']), ey['frames']
+    spans, f = still_spans(ctx)
+    idle, blind, measured = [], [], 0
+    need = sum(v36_need(limit, step))
+    for s in ctx['film']['scenes']:
+        ks = [k for k, x in enumerate(fr) if s['start'] - 1e-6 <= x['t'] < s['end'] - 1e-6]
+        pairs = list(zip(ks, ks[1:]))
+        if len(pairs) < need:
+            blind.append('%s (%.1f с)' % (s['id'], s['end'] - s['start']))
+        moves = [zone_shares(fr[a]['file'], fr[b]['file'], gx, gy, delta) for a, b in pairs]
+        paused = [any(t0 - 1e-6 <= (fr[a]['t'] + fr[b]['t']) / 2 <= t1 + 1e-6 for t0, t1, _ in spans.get(s['id'], []))
+                  for a, b in pairs]
+        found = {}
+        live = False
+        for z in range(gx * gy):
+            alive = [m[z] >= share for m in moves]
+            run = best = 0
+            since = None                         # пара кадров, с которой зона — слой: первое движение не короче порога
+            for i, v in enumerate(alive):
+                run = run + 1 if v else 0
+                best = max(best, run)
+                if since is None and run * step >= limit - 1e-6:
+                    since = i + 1
+            if since is None:
+                continue                         # зона так долго не двигалась — не слой
+            live = True
+            i = since
+            while i < len(alive):                # простои: пары кадров подряд без движения и вне объявленной паузы
+                if alive[i] or paused[i]:
+                    i += 1
+                    continue
+                j = i
+                while j < len(alive) and not alive[j] and not paused[j]:
+                    j += 1
+                if (j - i) * step > limit + 1e-6:
+                    found.setdefault((fr[pairs[i][0]]['t'], fr[pairs[j - 1][1]]['t']), []).append((z, best * step))
+                i = j
+        if not live:
+            if len(pairs) >= need:
+                idle.append(s['id'])
+            continue
+        measured += 1
+        for (t0, t1), zs in sorted(found.items()):
+            names = ', '.join('%d×%d' % (z % gx + 1, z // gx + 1) for z, _ in zs)
+            f.append('V36 живость %s: зона %s (столбец×строка сетки %d×%d) стоит %.1f с, t=%.1f…%.1f с, — дольше '
+                     'density.max_static %.1f с, а до того двигалась без остановки %.1f с: слой заморожен? Законная '
+                     'пауза — поле раскадровки still {from, to, why}'
+                     % (s['id'], names, gx, gy, t1 - t0, t0, t1, limit, max(r for _, r in zs)))
+    notes = []
+    if blind:
+        notes.append('покраснеть не может: %s — сцена короче %.1f с не успеет и двигаться density.max_static %.1f с, и '
+                     'простоять дольше' % (', '.join(blind), need * step, limit))
+    if idle and (measured or f or blind):
+        notes.append('нечего мерить: %s — нет слоя, который движется дольше %.1f с' % (', '.join(idle), limit))
+    if notes:
+        note(ctx, 'V36', '; '.join(notes))
+    if not measured and not f:
+        return None
+    return f
+
+
+_Y_LUT = [int(round(v * 255)) for v in _SRGB] * 3
+
+
+def _hist_level(hist, share):
+    """Уровень 0…255, ниже или на котором лежит доля share пикселей гистограммы."""
+    need, acc = share * sum(hist), 0
+    for v, n in enumerate(hist):
+        acc += n
+        if acc >= need and n:
+            return v
+    return 255
+
+
+def line_cells(img, rect, scale):
+    """Контрасты клеток строки по пикселям кадра img: строка (rect в px холста) режется на клетки шириной в свою
+    высоту; контраст клетки — WCAG между светлым и тёмным краем её яркости (процентили EYE_INK_TAIL): заливка буквы
+    против обводки или фона под ней. None — строка в кадре мельче EYE_MIN_PX (или за кадром)."""
+    W, H = img.size
+    x0, y0 = max(0, int(math.floor(rect[0] * scale))), max(0, int(math.floor(rect[1] * scale)))
+    x1, y1 = min(W, int(math.ceil((rect[0] + rect[2]) * scale))), min(H, int(math.ceil((rect[1] + rect[3]) * scale)))
+    w, h = x1 - x0, y1 - y0
+    if w < EYE_MIN_PX or h < EYE_MIN_PX:
+        return None
+    # относительная яркость WCAG: каналы в линейный свет (таблица), затем веса 0,2126 / 0,7152 / 0,0722
+    lum = img.crop((x0, y0, x1, y1)).convert('RGB').point(_Y_LUT).convert('L', (0.2126, 0.7152, 0.0722, 0))
+    n = max(1, int(round(w / float(h))))
+    out = []
+    for i in range(n):
+        hist = lum.crop((i * w // n, 0, (i + 1) * w // n, h)).histogram()
+        lo, hi = _hist_level(hist, EYE_INK_TAIL), _hist_level(hist, 1.0 - EYE_INK_TAIL)
+        out.append((hi / 255.0 + 0.05) / (lo / 255.0 + 0.05))
+    return out
+
+
+def kept_contrast(cells, keep):
+    """Контраст, который держит доля keep клеток строки: худшие (1 − keep) клеток прощаются."""
+    s = sorted(cells)
+    return s[min(len(s) - 1, int(math.floor((1.0 - keep) * len(s) + 1e-9)))]
+
+
+def v37_text_pixels(ctx):
+    """V37 (новое, WCAG 1.4.3; ретро открытки B): текст читается на своём фоне — по пикселям, при любом стиле и без
+    него. В каждом кадре полосы (через density.zones.step_sec секунд, полный размер) каждая строка, видимая на 1,0:
+    надпись DOM (.t содержания и заголовок; не закрытая, не исключение legibility_except — его мерит V35) и область,
+    которую сцена объявила для текста на canvas (window.__textRects). Строка режется на клетки шириной в свою
+    высоту, контраст клетки — светлый край яркости к тёмному; доля legibility.pixel.keep клеток обязана держать
+    контраст ≥ legibility.pixel.contrast_min. Провал называет худший кадр строки и измеренный контраст."""
+    cmin = float(cfg_need(ctx, 'tokens', 'legibility.pixel.contrast_min'))
+    keep = float(cfg_need(ctx, 'tokens', 'legibility.pixel.keep'))
+    ey = eye(ctx)
+    if ey is None:
+        note(ctx, 'V37', EYE_OFF)
+        return None
+    scale = float(ey['scale'])
+    dim = legibility_except(ctx)
+    worst, f, seen, broken = {}, [], set(), set()
+    for fr in ey['frames']:
+        img = None
+        scene = next((s['id'] for s in ctx['film']['scenes'] if s['start'] - 1e-6 <= fr['t'] < s['end'] - 1e-6), None)
+        for ln in fr['text']:
+            canvas = ln.get('src') == 'canvas'
+            if canvas:
+                rect = ln.get('rect')
+                if ln.get('error') or not (isinstance(rect, list) and len(rect) == 4
+                                           and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in rect)):
+                    why = ln.get('error') or 'rect = %r' % (rect,)
+                    if why not in broken:
+                        broken.add(why)
+                        f.append('V37 читаемость: window.__textRects(t) в кадре t=%.2f с отдала не область текста (%s) — нужно '
+                                 '[{id, rect: [x, y, w, h], text, opacity}], числа в px кадра' % (fr['t'], str(why)[:160]))
+                    continue
+                if float(ln.get('opacity', 1)) < FULL:
+                    continue
+                key, sc = ('canvas', str(ln.get('id', '?')), str(ln.get('text', ''))), scene
+            else:
+                if float(ln.get('o', 0)) < FULL or ln.get('covered') or ln['id'] in dim or not _WORD_RE.search(ln.get('text') or ''):
+                    continue
+                rect, key, sc = ln['rect'], ('dom', ln['id'], '%s|%s' % (ln.get('k', 0), ln.get('text', ''))), ln.get('scene') or scene
+            st = os.stat(fr['file'])
+            ck = ('cells', fr['file'], st.st_mtime_ns, st.st_size, tuple(rect), scale)
+            if ck not in _IMG_CACHE:
+                if img is None:
+                    from PIL import Image
+                    img = Image.open(fr['file']).convert('RGB')
+                _IMG_CACHE[ck] = line_cells(img, rect, scale)
+            cells = _IMG_CACHE[ck]
+            if cells is None:
+                continue
+            seen.add(sc)
+            c = kept_contrast(cells, keep)
+            w = worst.get(key)
+            worst[key] = (min(c, w[0]) if w else c, fr['t'] if not w or c < w[0] else w[1], (w[2] if w else 0) + 1, len(cells))
+    if not worst and not f:
+        return None
+    for key, (c, t, n, cells) in sorted(worst.items()):
+        if c >= cmin:
+            continue
+        who = ('canvas «%s»' % key[1]) if key[0] == 'canvas' else '#%s' % key[1]
+        text = key[2] if key[0] == 'canvas' else key[2].split('|', 1)[1]
+        f.append('V37 читаемость: %s «%s» — контраст букв с пикселями под ними %.2f в кадре t=%.2f с (худший из %d кадров, '
+                 'где строка видна на 1,0), нужно ≥ %.1f на доле %.2f строки (legibility.pixel; клеток в строке %d)'
+                 % (who, text[:40], c, t, n, cmin, keep, cells))
+    blank = [s['id'] for s in ctx['film']['scenes'] if s['id'] not in seen]
+    if blank and seen:
+        note(ctx, 'V37', 'нечего мерить: %s — текста на 1,0 в кадрах нет' % ', '.join(blank))
+    return f
+
+
+# ---------------------------------------------------------------- V38 буквы «пером», V39 Lottie, V40–V43 набор букв
+PEN_DO = 'write'          # действие метки act, которое исполняет плагин pen
+PEN_INK_PX = 12           # V38: столько пикселей краски правее пера — сглаживание кромки штриха, не буква
+PEN_TIP_TOL = 0.02        # V38: доля ширины строки, на которую открытая часть вправе опережать закон пера
+PEN_LEAD_PX = 2.0         # V38: ведущая линия короче этого (px × непрозрачность) — её в кадре нет
+PEN_LEAD_STEP = 0.5       # V38: за кадр линия не появляется и не гаснет больше чем на половину своей длины
+LOTTIE_FRAME_TOL = 0.02   # V39: кадр анимации в промере против расчёта по шкале, кадров файла
+LOTTIE_MIN_FRAMES = 3     # V39: промер застал не меньше трёх разных кадров анимации — иначе мерить нечем
+
+
+def _power_ease(name):
+    """Кривые GSAP none и power<N>.in / out / inOut по их определению (степень N + 1) — как api.powerEase в lib/stage.js."""
+    m = re.match(r'^power(\d)\.(in|out|inOut)$', str(name or 'none'))
+    if not m:
+        return lambda x: x
+    n, kind = int(m.group(1)) + 1, m.group(2)
+    if kind == 'in':
+        return lambda x: x ** n
+    if kind == 'out':
+        return lambda x: 1 - (1 - x) ** n
+    return lambda x: (2 ** (n - 1)) * x ** n if x < 0.5 else 1 - (-2 * x + 2) ** n / 2.0
+
+
+def _act_cues(ctx, do=None):
+    """[(id сцены, раскадровка, метка)] — метки act сцен фильма (do — только с таким действием)."""
+    out = []
+    for s, sb in storyboards(ctx):
+        for c in ((sb.get('plugins') or {}).get('act') or {}).get('cues') or []:
+            if do is None or c.get('do') == do:
+                out.append((s['id'], sb, c))
+    return out
+
+
+def _plugin_items(smp, name):
+    for p in (smp or {}).get('plugins') or []:
+        if p and p.get('plugin') == name:
+            return p.get('items') or []
+    return []
+
+
+def v38_pen_hidden(ctx):
+    """V38 буквы «пером» (плагин pen, метки act do «write»). Закон — из раскадровки и tokens.json motion.act.<motion>,
+    не из плагина: строка i начинает в t + i · line_lag · L, L = (until − t) / (1 + (N − 1) · line_lag); в доле p своей
+    длины перо прошло ease((p − lead_in) / (contour_until − lead_in)) строки. По промеру плагина (краска слоя букв,
+    считанная с холста, перо, ведущая линия):
+      строка не видна до пера — пока перо не дошло до строки, краски в ней нет; правее пера краски нет; открытая
+        часть строки не опережает закон пера; текст строки на экране — дословно из раскадровки;
+      строка написана — после записи в ней есть краска и заливка дошла до конца;
+      ведущая линия растёт и гаснет не за кадр — между соседними кадрами её видимая длина не меняется от нуля и до
+        нуля больше чем на половину полной длины."""
+    cues = _act_cues(ctx, PEN_DO)
+    if not cues:
+        return None
+    table = cfg_need(ctx, 'tokens', 'motion.act')
+    samples = sorted(ctx['probe']['samples'], key=lambda s: s['t'])
+    F = FR(ctx)
+    f = []
+    for sc, sb, c in cues:
+        key = '%s:%s' % (sc, c.get('id'))
+        m = table.get(c.get('motion')) or {}
+        lines = c.get('lines') or []
+        t0 = beat_t(ctx, c['t']) if isinstance(c.get('t'), dict) else None
+        if t0 is None or not lines or any(m.get(k) is None for k in ('ease', 'lead_in', 'contour_until', 'line_lag')):
+            f.append('V38 перо %s: у метки нет момента t, строк lines или чисел motion.act.%s — закон записи не посчитать'
+                     % (key, c.get('motion')))
+            continue
+        until = beat_t(ctx, c['until']) if isinstance(c.get('until'), dict) else t0 + float(m.get('dur') or 0)
+        span = (until - t0) / (1 + (len(lines) - 1) * float(m['line_lag']))
+        li, cu, ease = float(m['lead_in']), float(m['contour_until']), _power_ease(m['ease'])
+        recs = [(s['t'], it) for s in samples for it in _plugin_items(s, 'pen') if it.get('scene') == sc and it.get('cue') == c.get('id')]
+        if not recs:
+            f.append('V38 перо %s: метки нет в промере плагина pen — буквы пишет не он' % key)
+            continue
+        for i, ln in enumerate(lines):
+            lk = '%s строка %d' % (key, i + 1)
+            start = t0 + i * float(m['line_lag']) * span
+            series = [(t, it['lines'][i]) for t, it in recs if i < len(it.get('lines') or [])]
+            if not series:
+                f.append('V38 перо %s: строки нет в промере плагина pen' % lk)
+                continue
+            if series[0][1].get('text') != ln.get('text'):
+                f.append('V38 перо %s: на экране «%s», а в раскадровке «%s» — текст фразы ≠ раскадровке'
+                         % (lk, series[0][1].get('text'), ln.get('text')))
+            early = None
+            for t, r in series:
+                p = min(1.0, max(0.0, (t - start) / span))
+                if p <= li + 1e-9:
+                    if r.get('ink', 0) > PEN_INK_PX:
+                        early = 't=%.3f с: перо ещё не дошло до строки, а в ней %d px краски' % (t, r['ink'])
+                else:
+                    e = ease(min(1.0, (p - li) / (cu - li)))
+                    rect = r.get('rect') or [0, 0, 1, 1]
+                    got = ((r['tip'] - rect[0]) / rect[2]) if r.get('tip') is not None else 0.0
+                    if r.get('ink_ahead', 0) > PEN_INK_PX:
+                        early = 't=%.3f с: правее пера %d px краски' % (t, r['ink_ahead'])
+                    elif got > e + PEN_TIP_TOL:
+                        early = 't=%.3f с: открыто %.0f %% строки, а перо по закону прошло %.0f %%' % (t, got * 100, e * 100)
+                if early:
+                    break
+            if early:
+                f.append('V38 перо %s: строка видна до пера (%s)' % (lk, early))
+            done = [r for t, r in series if t >= start + span + F - 1e-6]
+            if not done:
+                f.append('V38 перо %s: нет кадра промера после записи (t ≥ %.2f с) — написана ли строка, не видно' % (lk, start + span + F))
+            elif done[-1].get('ink', 0) <= PEN_INK_PX or float(done[-1].get('fill') or 0) < 1 - 1e-3:
+                f.append('V38 перо %s: строка не написана — после записи в ней %d px краски, заливка дошла до %.0f %%'
+                         % (lk, done[-1].get('ink', 0), float(done[-1].get('fill') or 0) * 100))
+
+            def lead(r):
+                return float(r.get('lead') or 0) * float(r.get('lead_alpha') if r.get('lead_alpha') is not None else 1)
+            if not any(lead(r) > PEN_LEAD_PX for _, r in series):
+                f.append('V38 перо %s: ведущей линии нет ни в одном кадре промера — перо не ведёт линию к строке' % lk)
+            for (ta, a), (tb, b) in zip(series, series[1:]):
+                if tb - ta > 1.5 * F:
+                    continue
+                full = max(float(a.get('lead_full') or 0), float(b.get('lead_full') or 0), 1.0)
+                if lead(a) <= PEN_LEAD_PX and lead(b) > PEN_LEAD_STEP * full:
+                    f.append('V38 перо %s: ведущая линия появилась сразу во всю длину (кадр %.3f → %.3f с: 0 → %.0f px из %.0f)'
+                             % (lk, ta, tb, lead(b), full))
+                    break
+                if lead(b) <= PEN_LEAD_PX and lead(a) > PEN_LEAD_STEP * full:
+                    f.append('V38 перо %s: ведущая линия погасла одним кадром (кадр %.3f → %.3f с: %.0f px из %.0f → 0)'
+                             % (lk, ta, tb, lead(a), full))
+                    break
+    return f
+
+
+def _lottie_elements(ctx):
+    """[(id сцены, элемент раскадровки kind «lottie»)] фильма."""
+    return [(s['id'], e) for s, sb in storyboards(ctx, raw=True) for e in sb.get('elements') or [] if e.get('kind') == 'lottie']
+
+
+def v39_lottie_time(ctx):
+    """V39 Lottie (плагин lottie, элементы kind «lottie») — анимация идёт по времени шкалы, а не загрузки страницы.
+    Ожидание — из раскадровки и самого файла анимации: кадр в момент t = (t − at) · speed · fr (at — якорь элемента,
+    без него — начало сцены); до at — первый кадр, после конца — последний (loop — по кругу). По промеру плагина —
+    кадр, в котором проигрыватель стоит на самом деле: в каждом кадре промера он равен расчёту, анимация загружена.
+    Кадры детерминизма (film.json stills, если фильм их снимает) сверяет V41; запросы страницы мимо своих файлов
+    (plugin_probe.json requests) — здесь: при рендере по сети ничего не грузится."""
+    els = _lottie_elements(ctx)
+    if not els:
+        return None
+    f = []
+    samples = sorted(ctx['probe']['samples'], key=lambda s: s['t'])
+    for sc, e in els:
+        key = '%s:%s' % (sc, e.get('id'))
+        path = None
+        for base in (ctx['root'], HERE):
+            p = os.path.join(base, e.get('src') or '')
+            if os.path.isfile(p):
+                path = p
+                break
+        if not path:
+            f.append('V39 Lottie %s: нет файла анимации %s' % (key, e.get('src')))
+            continue
+        data = load_json(path)
+        total, rate = float(data['op'] - data['ip']), float(data['fr'])
+        sc_rec = [x for x in ctx['film']['scenes'] if x['id'] == sc][0]
+        at = beat_t(ctx, e['at']) if isinstance(e.get('at'), dict) else sc_rec['start']
+        if at is None:
+            f.append('V39 Lottie %s: момент at ссылается на реплику, которой нет в сборке' % key)
+            continue
+        speed, loop = float(e.get('speed', 1)), bool(e.get('loop'))
+        recs = [(s['t'], it) for s in samples for it in _plugin_items(s, 'lottie') if it.get('scene') == sc and it.get('id') == e.get('id')]
+        if not recs:
+            f.append('V39 Lottie %s: элемента нет в промере плагина lottie — анимацию играет не он' % key)
+            continue
+        seen, bad = set(), None
+        for t, r in recs:
+            want = max(0.0, (t - at) * speed * rate)
+            want = (want % total) if loop else min(total - 1, want)
+            seen.add(int(round(want)))
+            if not r.get('loaded'):
+                bad = 't=%.3f с: анимация ещё не загружена' % t
+            elif abs(float(r.get('frame', -1)) - want) > LOTTIE_FRAME_TOL and not (loop and abs(abs(float(r['frame']) - want) - total) <= LOTTIE_FRAME_TOL):
+                bad = 't=%.3f с: показан кадр %.2f, а по шкале — %.2f' % (t, float(r.get('frame', -1)), want)
+            if bad:
+                break
+        if bad:
+            f.append('V39 Lottie %s: время анимации не от шкалы (%s) — кадр зависит от загрузки страницы, рендер не повторится' % (key, bad))
+        elif len(seen) < LOTTIE_MIN_FRAMES:
+            f.append('V39 Lottie %s: промер застал только %d разных кадров анимации — она не играет в своей сцене (at, speed?)'
+                     % (key, len(seen)))
+    req = (ctx.get('plugin_probe') or {}).get('requests')
+    if req:
+        f.append('V39 Lottie: при показе страницы были запросы мимо её файлов (%d): %s — при рендере по сети ничего не грузится'
+                 % (len(req), ', '.join(str(u) for u in req[:3])))
+    return f
+
+
+def _kit():
+    """Проверки набора букв — модуль checks/card_kit.py (V40–V43). Грузится при первом вызове: ему нужны помощники
+    этого файла, а этот файл при запуске командой зовётся __main__."""
+    import importlib
+    sys.modules.setdefault('check', sys.modules[__name__])
+    if HERE not in sys.path:
+        sys.path.insert(0, HERE)
+    return importlib.import_module('checks.card_kit')
+
+
+def v40_card_kit(ctx):
+    """V40 набор букв: частицы фразы — из своего предмета, окна-буквы с тенью верхнего слоя, нырок в штрих буквы."""
+    return _kit().v40_card_kit(ctx)
+
+
+def v41_card_frames(ctx):
+    """V41 кадры фильма (stills): кадр 0 по правилу фильма, швы без скачка, детерминизм кадров действий."""
+    return _kit().v41_card_frames(ctx)
+
+
+def v42_beatsync(ctx):
+    """V42 ключевые события меток — на долях трека (project.json beats)."""
+    return _kit().v42_beatsync(ctx)
+
+
+def v43_card_texts(ctx):
+    """V43 текст фразы набора букв на экране — дословно из раскадровки."""
+    return _kit().v43_card_texts(ctx)
+
+
 CHECKS = [('V1', 'длительность и время', v1_duration), ('V2', 'реплики', v2_replies), ('V3', 'полотно', v3_canvas),
           ('V4', 'текст = источник', v4_text), ('V5', 'стык', v5_seams), ('V6', 'раскадровка исполнена', v6_storyboard),
           ('V7', 'шов без пустого кадра', v7_seam_frames), ('V8', 'слои', v8_layers), ('V9', 'итог сцены', v9_scene_end),
@@ -2886,21 +3485,36 @@ CHECKS = [('V1', 'длительность и время', v1_duration), ('V2', 
           ('V28', 'стартовый кадр = картинка', v28_start_image), ('V29', 'таймер = настенное время события', v29_timer),
           ('V30', 'часы = настенное время кадра', v30_clock), ('V31', 'действия мира исполнены', v31_act),
           ('V32', 'камера сцены', v32_camera), ('V33', 'скрытые элементы варианта (hide)', v33_hide),
-          ('V34', 'сторож текста проекта', v34_text_guard), ('V35', 'тусклая вывеска', v35_dim_sign)]
+          ('V34', 'сторож текста проекта', v34_text_guard), ('V35', 'тусклая вывеска', v35_dim_sign),
+          ('V36', 'живость по зонам', v36_alive_zones), ('V37', 'текст читается по пикселям', v37_text_pixels),
+          ('V38', 'буквы пером: строка не видна до пера', v38_pen_hidden), ('V39', 'Lottie: время от шкалы', v39_lottie_time),
+          ('V40', 'набор букв: частицы, окна, нырок', v40_card_kit), ('V41', 'кадры фильма: швы и детерминизм', v41_card_frames),
+          ('V42', 'набор букв: события на долях трека', v42_beatsync), ('V43', 'набор букв: текст = раскадровка', v43_card_texts)]
 SKIP_WHY = {'V25': 'у героев нет размеченных конечностей (data-limb)',
+            'V17': 'в фильме нет речи: все строки немые (silent) — порядок появления не с чем сравнивать',
             'V26': 'в фильме нет сцен frame: false', 'V27': 'в фильме нет помех (plugins.glitch)',
             'V28': 'в фильме нет картинки-кадра (start_image)', 'V29': 'в фильме нет таймера (plugins.timer)',
             'V30': 'в фильме нет часов (plugins.clock)', 'V31': 'в фильме нет меток действий (plugins.act)',
             'V32': 'в фильме нет камеры (метки who «cam»)', 'V33': 'у фильма нет ключа hide',
-            'V34': 'у проекта нет project.json text_guard', 'V35': 'в фильме нет тусклой вывески (legibility_except)'}
+            'V34': 'у проекта нет project.json text_guard', 'V35': 'в фильме нет тусклой вывески (legibility_except)',
+            'V36': 'нечего мерить — ни в одной сцене нет слоя, который движется без остановки дольше density.max_static',
+            'V37': 'нечего мерить — в кадрах нет ни одной строки текста, видимой на 1,0',
+            'V38': 'в фильме нет букв пером (метки act do «write»)',
+            'V39': 'в фильме нет анимации Lottie (элементы kind «lottie»)',
+            'V40': 'в фильме нет набора букв (метки act gather, windows, dive)',
+            'V41': 'у фильма нет ключа stills (кадры швов и детерминизма не снимаются)',
+            'V42': 'у проекта нет project.json beats или в фильме нет меток act',
+            'V43': 'в фильме нет фраз набора букв (метки act gather со строками)'}
 
 
 def run(ctx, quiet=False):
     lines, bad = [], 0
+    ctx.pop('_notes', None)
     for code, name, fn in CHECKS:
         fails = fn(ctx)
         if fails is None:
             why = 'у фильма нет стиля' if code in ('V21', 'V22', 'V23', 'V24') else SKIP_WHY.get(code, 'не проверено — нет данных (см. CHECKS.md)')
+            why = (ctx.get('_notes') or {}).get(code) or why
             lines.append('SKIP %s %s: %s' % (code, name, why))
         elif fails:
             bad += len(fails)
@@ -2908,7 +3522,8 @@ def run(ctx, quiet=False):
         elif code == 'V1' and ctx.get('page_only'):
             lines.append('OK   V1 длительность и время (--page: длина страницы, видео не смотрим)')
         else:
-            lines.append('OK   %s %s' % (code, name))
+            extra = (ctx.get('_notes') or {}).get(code)
+            lines.append('OK   %s %s%s' % (code, name, ' (%s)' % extra if extra else ''))
     if not quiet:
         print('\n'.join(lines))
     return bad, lines
@@ -2937,6 +3552,7 @@ def film_passes(root, film, out_dir):
 
 def main():
     sys.path.append(ENGINE)
+    import PIL  # noqa: F401  проверка без Pillow не идёт (V36, V37 мерят пиксели): нехватка — строкой от deps.run
     import project_root as pr
     root, argv = pr.split_argv(sys.argv[1:])       # --project → MOTION_PROJECT → <шаблон>/project
     root = str(root)
@@ -2955,6 +3571,15 @@ def main():
     if not args:
         raise SystemExit(__doc__)
     film = args[0]
+    if '--red-init' in flags:
+        # калибровка порч своего фильма: checks/red_<фильм>.py с рабочим минимумом (порчи глаза V36, V37)
+        sys.path.insert(0, HERE)
+        from checks import red_film
+        dst, made = red_film.init(root, film)
+        print(('порчи фильма заведены: %s\nдальше: check.py %s --red и --samples (страница — build.py %s --page); свои порчи '
+               'дописывай в списки этого файла' % (dst, film, film)) if made else
+              'порчи фильма уже есть: %s — файл не тронут' % dst)
+        sys.exit(0)
     if style_given:
         # --style X: проход фильма в стиле X — каталог <out>/<фильм>/X/ (его кладёт build.py <фильм> --style X)
         if not style or style.startswith('--'):
@@ -2988,9 +3613,14 @@ def main():
     if flags & {'--red', '--red-slow', '--samples'}:
         sys.path.insert(0, HERE)
         import importlib
-        # порчи калиброваны на свой фильм: checks/red_<фильм>.py, иначе — демо (он сам скажет, что не калиброван)
+        # порчи калиброваны на свой фильм: checks/red_<фильм>.py; у демо — red_demo.py; у фильма без своего файла —
+        # рабочий минимум, годный для любого фильма (red_film.py: порчи глаза V36, V37; свой файл заводит --red-init)
         base = film.split('/')[0].split('\\')[0]
-        mod = 'red_' + base if os.path.exists(os.path.join(HERE, 'checks', 'red_%s.py' % base)) else 'red_demo'
+        mod = ('red_' + base if os.path.exists(os.path.join(HERE, 'checks', 'red_%s.py' % base))
+               else 'red_demo' if base == 'demo' else 'red_film')
+        if mod == 'red_film':
+            print('у фильма %s нет своих порч (checks/red_%s.py) — иду по общему минимуму checks/red_film.py; '
+                  'свой файл заводит check.py %s --red-init' % (base, base, base))
         red_demo = importlib.import_module('checks.' + mod)
         code = 0
         parts = film.replace('\\', '/').split('/')
@@ -3016,4 +3646,6 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    sys.path.append(ENGINE)
+    import deps      # нехватка пакета или программы, истёкшее ожидание замка Chrome — строкой и кодом 2, не трассировкой
+    sys.exit(deps.run(main))

@@ -11,8 +11,13 @@
 на машину, общая для всех проектов на шаблоне (два проекта тоже не запустят два Chrome разом); другая — переменная
 MOTION_CHROME_LOCK (тесты берут свою; проект со своим замком в папке проекта ставит её сам). В папке owner.json: pid, подпись, время, token. Замок процесса, которого точно нет, снимается
 атомарно: папка переименовывается в уникальное `<имя>.stale-…` и удаляется, только если это та же папка с тем же
-владельцем; иначе возвращается на место. Процесс владельца не открылся (отказ в доступе) — владелец жив.
+владельцем; иначе возвращается на место. Процесс владельца не открылся (отказ в доступе) — владелец жив, если
+сверка не говорит обратного: в owner.json записано имя программы владельца (exe), и когда под его pid уже
+работает другая программа (pid переиспользован системным процессом), замок считается брошенным.
 Держатель снимает только свой замок (token). Замки старого вида (без token) понимаются так же.
+Ожидание ограничено: held() без timeout ждёт wait_limit() секунд — MOTION_CHROME_LOCK_TIMEOUT, иначе
+DEFAULT_TIMEOUT_SEC; по истечении — LockTimeout со строкой «кто держит»: pid, метка, с какого времени.
+Точки входа (build.py, check_all.py, with_chrome_lock.py) ловят его и выходят этой строкой, без трассировки.
 Вложенность: держатель кладёт в окружение MOTION_CHROME_LOCK_HELD = путь замка; дочерние процессы
 (сборка под with_chrome_lock зовёт промер) видят, что замок уже их, и не ждут сами себя.
 """
@@ -28,20 +33,95 @@ from pathlib import Path
 
 ENV_PATH = 'MOTION_CHROME_LOCK'
 ENV_HELD = 'MOTION_CHROME_LOCK_HELD'
+ENV_TIMEOUT = 'MOTION_CHROME_LOCK_TIMEOUT'
+DEFAULT_TIMEOUT_SEC = 3600.0   # предел ожидания: дольше часа законный владелец (рендер фильма) замок не держит
 DEFAULT = Path(tempfile.gettempdir()) / 'motion-studio-chrome-lock'     # один замок на машину
 POLL_SEC = 0.25
 NOTE_EVERY_SEC = 30.0
 FRESH_SEC = 10.0          # папка без owner.json моложе этого — замок только что взят, не чужой мусор
 
 
+class LockTimeout(TimeoutError):
+    """Замок не освободился за предел ожидания. owner — owner.json владельца (может быть пустым)."""
+
+    def __init__(self, waited, owner):
+        self.waited, self.owner = waited, dict(owner or {})
+        super().__init__(describe(self.owner, waited))
+
+
 def lock_path():
     return Path(os.environ.get(ENV_PATH) or DEFAULT).resolve()
 
 
-def _alive(pid, since=None):
+def wait_limit():
+    """Сколько секунд ждать замок, если вызов не назвал предел сам: MOTION_CHROME_LOCK_TIMEOUT, иначе умолчание."""
+    raw = os.environ.get(ENV_TIMEOUT)
+    if not raw:
+        return DEFAULT_TIMEOUT_SEC
+    try:
+        sec = float(raw.replace(',', '.'))
+    except ValueError:
+        sec = -1.0
+    if sec <= 0:
+        raise SystemExit('%s=%r — нужно число секунд больше нуля (предел ожидания замка Chrome)' % (ENV_TIMEOUT, raw))
+    return sec
+
+
+def describe(owner, waited):
+    """Строка об истёкшем ожидании: кто держит замок и что с этим делать."""
+    pid, label, since = owner.get('pid'), owner.get('label'), owner.get('since')
+    if pid is None:
+        who = 'владелец не назван (в папке замка нет owner.json)'
+    else:
+        when = time.strftime('%H:%M:%S', time.localtime(float(since))) if since else '?'
+        who = 'его держит pid %s («%s», с %s)' % (pid, label, when)
+    return ('замок Chrome занят дольше %.0f с: %s. Дождись его или заверши зависший процесс — замок мёртвого '
+            'владельца снимается сам; папка замка: %s; свой предел ожидания — %s=<секунд>'
+            % (waited, who, lock_path(), ENV_TIMEOUT))
+
+
+def _image_name(pid):
+    """Имя программы процесса pid (Windows: снимок процессов, работает и для тех, что не открыть) или None."""
+    if os.name != 'nt':
+        try:
+            with open('/proc/%d/comm' % pid, encoding='utf-8') as fh:
+                return fh.read().strip() or None
+        except OSError:
+            return None
+    import ctypes
+    from ctypes import wintypes
+
+    class Entry(ctypes.Structure):
+        _fields_ = [('dwSize', wintypes.DWORD), ('cntUsage', wintypes.DWORD), ('th32ProcessID', wintypes.DWORD),
+                    ('th32DefaultHeapID', ctypes.c_void_p), ('th32ModuleID', wintypes.DWORD),
+                    ('cntThreads', wintypes.DWORD), ('th32ParentProcessID', wintypes.DWORD),
+                    ('pcPriClassBase', ctypes.c_long), ('dwFlags', wintypes.DWORD), ('szExeFile', ctypes.c_wchar * 260)]
+    k = ctypes.WinDLL('kernel32', use_last_error=True)
+    k.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+    k.CreateToolhelp32Snapshot.argtypes = (wintypes.DWORD, wintypes.DWORD)
+    k.Process32FirstW.argtypes = k.Process32NextW.argtypes = (wintypes.HANDLE, ctypes.POINTER(Entry))
+    k.CloseHandle.argtypes = (wintypes.HANDLE,)
+    snap = k.CreateToolhelp32Snapshot(0x2, 0)              # TH32CS_SNAPPROCESS
+    if not snap or snap == wintypes.HANDLE(-1).value:
+        return None
+    try:
+        e = Entry()
+        e.dwSize = ctypes.sizeof(Entry)
+        more = k.Process32FirstW(snap, ctypes.byref(e))
+        while more:
+            if e.th32ProcessID == pid:
+                return e.szExeFile or None
+            more = k.Process32NextW(snap, ctypes.byref(e))
+        return None
+    finally:
+        k.CloseHandle(snap)
+
+
+def _alive(pid, since=None, exe=None):
     """Жив ли владелец. Сомнение — в пользу живого: снятый живой замок пускает второй Chrome, а это хуже ожидания.
-    Мёртв — только когда точно: процесса с таким pid нет, он завершён, или pid занят процессом, начатым после
-    since (pid переиспользован)."""
+    Мёртв — только когда точно: процесса с таким pid нет, он завершён, pid занят процессом, начатым после
+    since (pid переиспользован), или — когда процесс не открыть — под этим pid работает не та программа, что
+    записана владельцем (exe)."""
     try:
         pid = int(pid)
     except (TypeError, ValueError):
@@ -57,8 +137,10 @@ def _alive(pid, since=None):
         k.CloseHandle.argtypes = (wintypes.HANDLE,)
         h = k.OpenProcess(0x1000, False, pid)              # PROCESS_QUERY_LIMITED_INFORMATION
         if not h:
-            return ctypes.get_last_error() != 87           # ERROR_INVALID_PARAMETER — такого процесса нет;
-                                                           # отказ в доступе и прочее — процесс есть, он жив
+            if ctypes.get_last_error() == 87:              # ERROR_INVALID_PARAMETER — такого процесса нет
+                return False
+            name = _image_name(pid) if exe else None       # отказ в доступе: процесс есть — сверить, тот ли
+            return not (name and name.lower() != str(exe).lower())
         try:
             code = wintypes.DWORD()
             if not k.GetExitCodeProcess(h, ctypes.byref(code)):
@@ -107,7 +189,7 @@ def _stale(seen):
     _, mtime, ow = seen
     if ow is None:
         return time.time() - mtime > FRESH_SEC
-    return not _alive(ow.get('pid'), ow.get('since'))
+    return not _alive(ow.get('pid'), ow.get('since'), ow.get('exe'))
 
 
 def _clear_stale(d, seen):
@@ -151,8 +233,11 @@ def _release(d, token):
 
 @contextlib.contextmanager
 def held(label, timeout=None, out=None):
-    """Взять замок (ждать, пока свободен) на время блока. timeout — секунд ожидания (None — без предела)."""
+    """Взять замок (ждать, пока свободен) на время блока. timeout — секунд ожидания; None — предел по умолчанию
+    (wait_limit()). Не дождался — LockTimeout с меткой и pid владельца."""
     out = out or sys.stderr
+    if timeout is None:
+        timeout = wait_limit()
     d = lock_path()
     if os.environ.get(ENV_HELD) == str(d):
         yield d                         # замок уже держит наш предок
@@ -164,8 +249,8 @@ def held(label, timeout=None, out=None):
         try:
             os.mkdir(d)
             with open(d / 'owner.json', 'w', encoding='utf-8') as fh:
-                json.dump({'pid': os.getpid(), 'label': label, 'since': time.time(), 'token': token}, fh,
-                          ensure_ascii=False)
+                json.dump({'pid': os.getpid(), 'label': label, 'since': time.time(), 'token': token,
+                           'exe': os.path.basename(sys.executable or '')}, fh, ensure_ascii=False)
             break
         except FileExistsError:
             seen = _look(d)
@@ -176,9 +261,8 @@ def held(label, timeout=None, out=None):
                           file=out, flush=True)
                     continue
             now = time.time()
-            if timeout is not None and now - t0 > timeout:
-                ow = _owner(d) or {}
-                raise TimeoutError('замок Chrome занят дольше %.0f с: pid %s, %s' % (timeout, ow.get('pid'), ow.get('label')))
+            if now - t0 > timeout:
+                raise LockTimeout(timeout, _owner(d))
             if now - last_note >= NOTE_EVERY_SEC:
                 ow = _owner(d) or {}
                 print('замок Chrome занят (pid %s: %s) — жду' % (ow.get('pid'), ow.get('label')), file=out, flush=True)

@@ -1,0 +1,26 @@
+{
+ "scene": "silent-b",
+ "title": "Ещё четыре",
+ "frame": false,
+ "markup": "markup.html",
+ "notes": "Демо ролика без голоса (films/silent.json): вторая сцена на шкале тактов, строки 5–8. Метка звука swoosh на такте 7 (вход сцены уже звучит швом) и ding на акценте такта 8; три столбика растут на тактах 6, 7, 8 (plugins.act, who bars, do rise). Сцена без реплик: якоря — такты.",
+ "start_state": {},
+ "end_state": {},
+ "plugins": {
+  "act": {
+   "cues": [
+    {"id": "enter", "t": {"reply": 5, "at": 0}, "who": "head", "do": "enter", "motion": "nod"},
+    {"id": "up1", "t": {"reply": 6, "at": 0}, "who": "bars", "do": "rise", "motion": "nod", "idx": 0},
+    {"id": "up2", "t": {"reply": 7, "at": 0}, "who": "bars", "do": "rise", "motion": "nod", "idx": 1,
+     "sfx": [{"name": "swoosh", "t": {"reply": 7, "at": 0}, "role": "accent"}]},
+    {"id": "up3", "t": {"reply": 8, "at": 0}, "who": "bars", "do": "rise", "motion": "nod", "idx": 2,
+     "sfx": [{"name": "ding", "t": {"reply": 8, "at": 0}, "role": "accent"}]},
+    {"id": "run", "t": {"reply": 5, "at": 0}, "who": "ruler", "do": "run", "motion": "gesture"}
+   ]
+  }
+ },
+ "beats": [
+  {"reply": 5, "at": 0, "offset": -1.6, "action": "show", "targets": ["head"], "anim": "rise"},
+  {"reply": 5, "at": 0, "offset": -1.5, "action": "show", "targets": ["bars", "ruler"], "anim": "fade"}
+ ]
+}

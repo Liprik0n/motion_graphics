@@ -14,15 +14,8 @@
   "bg_2": "#0A0E1A"
  },
  "fonts": {
-  "title": {
-   "family": "Bahnschrift",
-   "files": [
-    "bahnschrift.ttf",
-    "ariblk.ttf"
-   ],
-   "weight": 700,
-   "note": "геометрический гротеск, системный Windows (кириллица проверяется сборкой); свой шрифт заголовка — файлом в <проект>/assets/fonts, первым в files; нет файла — заголовок фирменным"
-  }
+  "title": {"family": "Sofia Sans", "files": ["SofiaSans-wght.ttf"], "weight": 700,
+             "note": "геометрический гротеск, файл движка под OFL (assets/fonts/README.md); свой шрифт — файлом в <проект>/assets/fonts, первым в files"}
  },
  "objects": [
   "tube",

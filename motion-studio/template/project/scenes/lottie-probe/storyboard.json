@@ -1,0 +1,17 @@
+{
+ "scene": "lottie-probe",
+ "title": "Готовая анимация",
+ "frame": false,
+ "notes": "Фикстура Lottie (engine/video/plugins/README.md, раздел «lottie»): элемент kind «lottie» играет файл движка engine/video/libs/pulse.lottie.json (написан вручную: скруглённый квадрат ездит, растёт и вращается, 60 кадров при 30 к/с). Кадр анимации — функция времени шкалы: с момента at идёт со скоростью speed, без круга держит последний кадр. Проверка — V39. Проигрыватель — пакет lottie-web из набора Node движка. Подпись стоит вплотную над анимацией: предмет без надписи рядом висел бы без опоры (V15); оба входят с конца предыдущей сцены — шов не пуст (V7). Немые строки 31–33 — такты по 2 с.",
+ "start_state": {},
+ "end_state": {},
+ "elements": [
+  {"id": "cap", "kind": "text", "x": 4, "y": 2.85, "w": 12, "h": 1.1, "text": "Готовая анимация", "size": 54, "bold": true, "color": "primary", "align": "center"},
+  {"id": "anim", "kind": "lottie", "x": 7.5, "y": 4, "w": 5, "h": 5, "src": "libs/pulse.lottie.json",
+   "at": {"reply": 31, "at": 0.25}, "speed": 1, "loop": false}
+ ],
+ "beats": [
+  {"reply": 31, "at": 0, "offset": -1.6, "action": "show", "targets": ["cap"], "anim": "rise"},
+  {"reply": 31, "at": 0, "offset": -1.5, "action": "show", "targets": ["anim"], "anim": "fade"}
+ ]
+}

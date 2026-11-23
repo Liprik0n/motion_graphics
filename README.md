@@ -1,14 +1,15 @@
 # motion-studio — ролик кодом от интервью до сдачи
 
-Скил для агента (Claude Code и других агентов, которые читают `SKILL.md`): учебный диалог, промо, шорт или
-объяснялка на HTML + GSAP (HyperFrames). Процесс из 12 этапов с воротами, роли-агенты, законы движения числами,
-озвучка через провайдера TTS, музыка и звуковые эффекты, проверки с порчами (каждая проверка доказывает, что
-краснеет на своём дефекте) и шаблон проекта с демо.
+Скил для агента (Claude Code и других агентов, которые читают `SKILL.md`): учебный диалог, промо, шорт, объяснялка
+или открытка на HTML + GSAP (HyperFrames). Процесс с воротами, роли-агенты, законы движения числами, озвучка через
+провайдера TTS, музыка и звуковые эффекты, проверки с порчами (каждая проверка доказывает, что краснеет на своём
+дефекте) и шаблон проекта с демо.
 
 | Папка | Что там |
 |---|---|
 | `motion-studio/` | сам скил. Вход — `motion-studio/SKILL.md` |
 | `motion-studio/template/` | шаблон проекта: движок видео, озвучка, звук, конфиги, демо и фикстуры |
+| `motion-studio/tools/` | установка одной командой (`setup.py`) и единая проверка скила (`check_skill.py`) |
 | `agents/` | шесть ролей: режиссёр, инженер движка, исполнитель сцены, звукорежиссёр, визуальный QA, фактчекер |
 
 ## Первое, что спросит скил
@@ -19,26 +20,24 @@
 
 ## Установка
 
-Нужны: **Python 3.12+**, **Node.js 20+** (проверено на 24), **git**. Проверено на Windows 10/11; на macOS и Linux
-движок рассчитан, но целиком не прогонялся (см. «Другие системы»).
+Нужны **Python 3.10+** (проверено на 3.14), **Node.js 22+** (проверено на 24) и **git**. Проверено на Windows 10; на
+других системах целиком не прогонялось.
 
-1. Скопировать `motion-studio/` в постоянное место и подключить к агенту:
-   - Claude Code: папка или ссылка в каталоге скилов — `~/.claude/skills/motion-studio`
-     (Windows: `mklink /J "%USERPROFILE%\.claude\skills\motion-studio" "<папка>\motion-studio"`;
-     macOS/Linux: `ln -s "<папка>/motion-studio" ~/.claude/skills/motion-studio`);
-   - роли: `agents/motion-*.md` → `~/.claude/agents/`;
-   - другой агент: положить `motion-studio/` туда, откуда он читает скилы, или дать ему `SKILL.md` как
-     инструкцию в начале работы.
-2. Зависимости Python: `pip install -r requirements.txt` (Pillow и imageio-ffmpeg — ffmpeg приходит с ним).
-3. Зависимости движка видео (gsap, hyperframes, puppeteer-core — версии закреплены):
+1. Скопировать репозиторий в постоянное место и подключить скил к агенту. Claude Code: папка или ссылка в
+   каталоге скилов —
+   `mklink /J "%USERPROFILE%\.claude\skills\motion-studio" "<папка>\motion-studio"`.
+   Другой агент: положить `motion-studio/` туда, откуда он читает скилы, или дать ему `SKILL.md` как инструкцию.
+2. Проверить машину и поставить недостающее одной командой:
    ```
-   cd motion-studio/template/engine/video
-   npm install
-   npx hyperframes browser ensure
+   python motion-studio/tools/setup.py check
+   python motion-studio/tools/setup.py install
+   python motion-studio/tools/setup.py agents --from agents
    ```
-   Вторая команда скачивает безголовый Chrome в кэш HyperFrames; промеры находят его сами (`CHROME_PATH` —
-   свой путь к Chrome).
-4. Проверка, что всё на месте:
+   `check` печатает, что найдено (Python и его пакеты, ffmpeg, Node, HyperFrames, Chrome, ядра, видеокарта) и чего
+   не хватает — с командой. `install` ставит пакеты Python по `requirements.txt`, набор Node (gsap, hyperframes,
+   puppeteer-core, lottie-web точными версиями) в общую папку `~/.motion-studio` и безголовый Chrome в кэш HyperFrames;
+   повторный запуск ничего не переустанавливает. `agents` копирует карточки ролей в `~/.claude/agents/`.
+3. Проверить, что всё на месте:
    ```
    python motion-studio/template/new_project.py ../my-video "Мой ролик"
    cd ../my-video
@@ -46,40 +45,48 @@
    python engine/video/check.py demo --page
    python engine/tools/check_all.py --quick
    ```
-   Новый проект берёт `node_modules` из шаблона ссылкой (Windows — junction) или копией.
+   Новый проект берёт набор Node из общей папки ссылкой (Windows — junction), сам шаблон не меняется.
 
-Озвучка платная (MiniMax): ключ и голоса — в `project/.env` по образцу `project/.env.example`. Скил тратит
+Озвучка платная (MiniMax): ключ и голоса — в файле `.env` проекта по образцу `project/.env.example`. Скил тратит
 знаки только по вашему слову и с лимитом. Без ключа работает всё, кроме синтеза: демо идёт на готовых mp3.
+
+## Шрифты
+
+Шрифты движка лежат файлами в `motion-studio/template/engine/video/assets/fonts/`: шрифты заголовков стилей под
+лицензией SIL OFL 1.1 и демо-шрифт Liberation Sans Narrow под Liberation Fonts license (семейство, источник, размер
+и файл лицензии — в `README.md` той же папки).
+Системные шрифты по имени движок не берёт: кадр одинаков на любой машине. Свой шрифт проекта — файлом в проект,
+с лицензией на файлы.
 
 ## Другая модель или другой агент
 
 - **Скрипты от модели не зависят**: сборка, проверки и порчи — Python и Node. Слабой модели они помогают больше
   всего: дефект ловит красная строка проверки, а не внимательность. Не пропускайте ворота и пилот из двух сцен.
-- **Роли** (`agents/*.md`) написаны в формате Claude Code: поля `model: opus` и `effort` подберите под то, что у вас
+- **Роли** (`agents/*.md`) написаны в формате Claude Code: поля `model` и `effort` подберите под то, что у вас
   есть (режиссёру — самую сильную модель, остальным — сильную или среднюю). Если агент не умеет субагентов, роли
   выполняются по очереди одним агентом; QA и фактчекер при этом начинают с чистого листа (новый чат), чтобы не
   смотреть глазами автора (`motion-studio/SKILL.md`, «Роли»).
 - Агенту, который не знает формат `SKILL.md`, достаточно сказать: «прочитай motion-studio/SKILL.md и иди по
   этапам».
 
-## Другие системы
-
-- **Chrome**: промеры ищут его в кэше HyperFrames (Windows, Linux, macOS) и в `CHROME_PATH`.
-- **ffprobe**: на Windows движок собирает заглушку встроенным `csc.exe`; на macOS/Linux нужен настоящий `ffprobe`
-  в PATH (`brew install ffmpeg` / `apt install ffmpeg`).
-- **Шрифты стилей**: часть стилей берёт заголовочные шрифты из системы Windows (Impact, Arial Black, Segoe и др.).
-  Файлы не копируются; если шрифта нет, заголовок идёт фирменным шрифтом проекта.
-
 ## Демо и фикстуры
 
-Демо-фильм (`template/project/films/demo.json`) и фикстуры возможностей движка (`bare`, `acts`, `kits`, `styles`) —
-нейтральные сцены. Звук демо — тоны-заглушки длины реплик (речи в шаблоне нет), своя озвучка делается
-`engine/tts/tts.py`. Демо-шрифт — Liberation Sans Narrow (`template/engine/video/assets/fonts/README.md`).
-Когда появятся свои сцены, демо и фикстуры удаляются (`template/README.md`).
+Демо-фильм (`template/project/films/demo.json`) и фикстуры возможностей движка — нейтральные сцены. Звук демо —
+тоны-заглушки длины реплик (речи в шаблоне нет), своя озвучка делается `engine/tts/tts.py`. Новый проект получает
+только демо; фикстуры шаблона — ключом `--with-fixtures`. Когда появятся свои сцены, демо удаляется
+(`motion-studio/template/README.md`).
 
 ## Проверка самого скила
 
 ```
-python motion-studio/tools/check_links.py          ссылки, якоря, пути; в тексте скила не должно быть путей чужой машины
-python motion-studio/tools/check_links.py --red    самопроверка: каждая порча краснеет своей строкой
+python motion-studio/tools/check_skill.py            ссылки скила и все тесты без браузера, минуты две
+python motion-studio/tools/check_skill.py --chrome   плюс новый проект во временной папке: страница демо, проверка, порчи
+python motion-studio/tools/check_links.py            только ссылки, якоря и пути; путей чужой машины в скиле быть не должно
 ```
+
+## Лицензии материалов
+
+Шрифты в `assets/fonts/` идут со своими лицензиями, тексты лежат рядом с файлами: шрифты заголовков стилей — SIL OFL 1.1
+(`OFL-*.txt`), демо-шрифт Liberation Sans Narrow — Liberation Fonts license (GNU GPL v2 с исключением для шрифтов), текст —
+`motion-studio/template/engine/video/assets/fonts/LICENSE-LiberationSansNarrow.txt`. Чужие материалы в ролик — только с источником и лицензией: строка в `project/materials.json`, проверка
+`engine/tools/check_materials.py`.

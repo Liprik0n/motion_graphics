@@ -14,8 +14,8 @@
   "pebble": "#C98B5A", "pebble_dark": "#8F5A33", "wave": "#6E6A62"
  },
  "fonts": {
-  "title": {"kind": "code", "note": "заголовок рисует plugin.js пластилиновыми буквами: шрифт декора (Rubik Bold) с градиентом своего цвета на каждую букву, тёмной кромкой и тенью — цвет текста каркаса в мире не трогается"},
-  "decor": {"family": "Rubik", "files": ["Rubik-Bold.ttf", "seguibl.ttf", "ariblk.ttf"], "weight": 700}
+  "title": {"kind": "code", "note": "заголовок рисует plugin.js пластилиновыми буквами: шрифт декора (Rubik, вес 700) с градиентом своего цвета на каждую букву, тёмной кромкой и тенью — цвет текста каркаса в мире не трогается"},
+  "decor": {"family": "Rubik", "files": ["Rubik-wght.ttf"], "weight": 700}
  },
  "objects": ["hill", "tree", "plane", "cloud", "pebbles", "waves", "fingerprints"],
  "params": {

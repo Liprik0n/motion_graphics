@@ -6,12 +6,14 @@
     python engine/video/build.py demo --only demo-b     одна сцена → <out>/demo--demo-b/
     python engine/video/build.py film --only s07,s08 --page   пара сцен — шов без рендера
     python engine/video/build.py demo --estimate        без звука: длительности по ms строк / смете
-    python engine/video/build.py demo --draft           CRF 23 вместо 18
-    python engine/video/build.py demo --keep-frames     не удалять PNG-кадры
-    python engine/video/build.py demo --png             кусок для склейки: кадры <out>/demo/frames/ и отметка
-                                                        frames/stamp.json, без mp4; свежие кадры не рендерятся
-                                                        заново (--force — заново; --frames N — пробные N кадров)
-    python engine/video/build.py demo --workers 3 --chunk-sec 20 --tmp <папка>
+    python engine/video/build.py demo --draft           черновик: размер и частота кадров из project.json render.draft
+                                                        → <out>/demo/video-draft.mp4 (кадры — frames-draft/)
+    python engine/video/build.py demo --scene demo-b    одна сцена фильма → <out>/demo/clips/scene-demo-b.mp4
+    python engine/video/build.py demo --start 3 --end 8 отрезок с 3-й по 8-ю секунду → clips/range-3.00-8.00.mp4
+    python engine/video/build.py demo --png             кусок для склейки: кадры <out>/demo/frames/<сцена>/ и отметка
+                                                        frames/stamp.json, без mp4 (--frames N — пробные N кадров)
+    python engine/video/build.py demo --force           мимо кэша кадров: снять все сцены заново
+    python engine/video/build.py demo --workers 6 --chunk-sec 20 --tmp <папка>
     python engine/video/build.py styles                 фильм с проходами по стилям (films/styles.json "styles") →
                                                         <out>/styles/<стиль>/ + <out>/styles/styles-sheet.png
     python engine/video/build.py styles --style film    один проход в стиле (имя папки styles/ или none)
@@ -24,6 +26,24 @@ CSS и плагин стиля на странице, промер стиля st
 Шаги: раскадровки (схема, контракт стыка) → таймлайн из звука → огибающие голоса → index.html +
 film.json → промер DOM (probe_dom.mjs → probe.json) → рендер HyperFrames в PNG кусками → один
 ffmpeg на весь фильм со сведённым звуком → покадровый лист.
+--only <сцена>: сцена, которая называет другую сцену фильма в своей разметке или в настройках плагинов (кадр входа
+соседа), собирается вместе с ней — сосед добавляется сам, об этом строка.
+
+Ролик без голоса (profiles/card.md): время задают немые строки манифеста {silent: true, ms, scene_start} — такты музыки;
+у сцены должна быть хотя бы одна строка шкалы, озвученных реплик может не быть, voices.json не нужен. Ключи фильма:
+"libs" — скрипты в <head> до разметки сцен: путь от корня проекта или имя библиотеки движка (engine/video/libs/<имя>.js,
+например "card-kit" — набор букв); "stills": true — кадры шва и детерминизма для промера (meta.stills, probe_frames.mjs).
+
+Буквы «пером» — метка act do «write» (plugins/pen.js подключается сам, числа — tokens.json motion.act.pen_*); готовая
+анимация — элемент раскадровки kind «lottie» (plugins/lottie.js, файл анимации вшивается в страницу, проигрыватель —
+пакет lottie-web из engine/video/node_modules или путь MOTION_LOTTIE_PLAYER). См. engine/video/plugins/README.md.
+
+Рендер идёт по сценам с кэшем кадров: <out>/<фильм>/frames/<сцена>/frame_%06d.png и отметка сцены рядом
+(engine/video/stamp.py). Сцена, чья отметка совпала с нынешней страницей, берётся из кэша — правка одной сцены
+не перерендеривает остальные, оборванный рендер продолжается с готовых сцен. Изменился сосед по шву — окно шва
+переснимается и сравнивается с кэшем. В журнале render.log на каждую снятую сцену — строка «сцена <id>: <N> кадров,
+<X> мс/кадр»; дольше бюджета project.json render.frame_budget_ms — строка «ТРЕВОГА…». Настройки рендера —
+project.json, блок render: {"workers": "auto" | число, "frame_budget_ms": число, "draft": {"scale", "fps"}}.
 
 Кусок рендера — фильм: ролик из нескольких фильмов рендерится кусками (`--png`), склейка — engine/video/assemble.py
 по монтажному листу project/montage.json. Пересборка страницы кадры куска не удаляет: годятся ли они, решает
@@ -64,6 +84,7 @@ import registry as styles_registry   # noqa: E402
 import stamp as frame_stamp          # noqa: E402  отметка кадров куска (frames/stamp.json)
 sys.path.insert(0, os.path.dirname(HERE))
 import chrome_lock   # noqa: E402  замок безголового Chrome: один на машину (engine/chrome_lock.py)
+import deps          # noqa: E402  чего не хватает на машине и чем поставить (engine/deps.py)
 import resources     # noqa: E402  свободное место и ОЗУ — печать перед рендером (engine/resources.py)
 
 GSAP = os.path.join(HERE, 'node_modules', 'gsap', 'dist', 'gsap.min.js')
@@ -72,6 +93,16 @@ FFPROBE_STUB = os.path.join(HERE, 'tools', 'ffprobe.exe')
 FFPROBE_STUB_SRC = os.path.join(HERE, 'tools', 'ffprobe_stub.cs')
 CHUNK_SEC = 20.0           # кусок рендера: 20 с; HyperFrames требует свободными ~8,3 МБ на кадр куска (его оценка сверху)
 CHUNK_PAGE = 'chunk.html'
+DRAFT_DEFAULT = {'scale': 0.5, 'fps': 15}      # черновик, если в project.json нет render.draft (решение скила: половина размера, 15 к/с)
+FINAL_CRF, FINAL_PRESET = 18, 'medium'         # кодирование финала
+DRAFT_CRF, DRAFT_PRESET = 23, 'veryfast'       # кодирование черновика
+# размеры, которые HyperFrames умеет снимать меньше полотна (render --resolution: deviceScaleFactor < 1)
+HF_PRESETS = {'landscape-720p': (1280, 720), 'portrait-720p': (720, 1280), 'square-720p': (720, 720),
+              'landscape-480p': (854, 480), 'portrait-480p': (480, 854), 'square-480p': (480, 480)}
+HF_ASPECT_TOL = 0.01       # пресет годится полотну с теми же пропорциями (± доля)
+WORKER_RAM = 1.0e9         # байт свободной памяти на воркер захвата (свой Chrome на полотне 1920 × 1080)
+WORKER_FRAMES = 30         # кадров на воркер: меньше — запуск ещё одного Chrome дольше, чем он успеет снять
+CHUNK_STRETCH = 1.25       # отрезок до 1,25 куска снимается одним куском
 ROUND_EPS = 5e-3           # доли кадра: моменты в файлах округлены до 4 знаков
 STEP_TEXT_DX = 0.85        # ″: текст шага от левого края элемента (кружок 0,62 + зазор), как .step-text в stage.css
 TEXT_LH = 1.2              # межстрочный у box, bullet, quiz (у обеих сторон текстового морфа один)
@@ -93,6 +124,19 @@ PLUGIN_REQUIRED = {
     'act': ('cues',),
 }
 CLOCK_MODES = ('digital',)
+LIBS_DIR = os.path.join(HERE, 'libs')          # библиотеки движка для ключа фильма "libs" (набор букв card-kit)
+# Буквы «пером» (plugins/pen.js): метка act do «write». Числа — строка tokens.json motion.act, названная в motion метки
+PEN_DO = 'write'
+PEN_KEYS = ('dur', 'ease', 'lead_in', 'contour_until', 'fill_lag', 'lead_out', 'line_lag', 'stroke_frac', 'lead_frac',
+            'sag_frac', 'tip_rise_frac')
+PEN_LINE_KEYS = ('text', 'x', 'y', 'size')
+PEN_MIN_FRAMES = 3             # ведущая линия растёт и гаснет не короче трёх кадров: иначе она «мигает»
+PEN_EASE_RE = re.compile(r'^(none|power[1-4]\.(in|out|inOut))$')
+# Lottie (plugins/lottie.js): проигрыватель — пакет lottie-web набора Node движка (package.json); свой путь — MOTION_LOTTIE_PLAYER
+LOTTIE_PACKAGE, LOTTIE_VERSION = 'lottie-web', '5.12.2'
+LOTTIE_PLAYER = os.path.join(HERE, 'node_modules', LOTTIE_PACKAGE, 'build', 'player', 'lottie.min.js')
+LOTTIE_ENV = 'MOTION_LOTTIE_PLAYER'
+LOTTIE_KEYS = ('fr', 'ip', 'op', 'w', 'h', 'layers')
 ACT_CUE_KEYS = ('id', 't', 'who', 'do')
 CAM = 'cam'                    # who камеры сцены: исполняет движок (plugins/act.js), положения — разметка cam-pos
 CAM_ASPECT_TOL = 0.01          # положение камеры — рамка с пропорциями кадра (± доля): масштаб один по обеим осям
@@ -297,6 +341,8 @@ def element_html(scene, e):
                     px(e['h'] - QUIZ['answer_h']), px(QUIZ['answer_h']), tone['fill'],
                     ('box-shadow:inset 0 0 0 %spx %s' % (pt_px(tone['line_pt']), tone['line'])) if tone['line'] else '',
                     px(QUIZ['answer_dx']), tone['color'], esc(e['answer'])))
+    elif k == 'lottie':          # готовая анимация: узел-хозяин, проигрыватель рисует в нём (plugins/lottie.js)
+        inner = '<div class="lottie-box" data-part="anim" style="position:absolute;left:0;top:0;width:100%;height:100%"></div>'
     else:
         raise SystemExit('Неизвестный вид элемента %s' % k)
     cls = 'el k-%s' % k
@@ -512,6 +558,11 @@ def resolve(film_sbs, tl, film_plugin_cfg=None):
                 sl[k] = round(t, 4)
                 tail = max(tail, sl[k] + (mo('chapter_dur') if k == 'chapter_at' else mo('title_in')))
         sl['plugins'] = resolve_plugins(sc, sb, at, ids[sc], film_plugin_cfg)
+        if any(c.get('do') == PEN_DO for c in (sl['plugins'].get('act') or {}).get('cues') or []):
+            sl['plugins']['pen'] = {'do': PEN_DO}        # плагин pen подключается сам: его метки — в plugins.act.cues
+        lot = lottie_items(sc, sb, at, sl)
+        if lot:
+            sl['plugins']['lottie'] = {'items': lot}
         for b in sb['beats']:
             t0 = at(b)
             tail = max(tail, beat_end(b, t0))
@@ -650,9 +701,30 @@ def resolve_plugins(sc, sb, at, scene_ids, film_cfg=None):
         if name == 'clock':
             r = clock_config(sc, r)
         if name == 'act':
+            act_moments(sc, r.get('cues'))
             r = act_config(sc, sb, r, scene_ids)
         out[name] = r
     return out
+
+
+ACT_MOMENTS = ('t', 'until', 'readable_until', 'formed', 'cover_by', 'emit_from', 'spent', 'visible_from')
+
+
+def act_moments(sc, cues):
+    """Моменты меток act (needs N26) — на любой глубине (sources_act[].t / until, objects[].live.until, sfx[].t): после перевода
+    якорей {reply, at} — секунды; строка, список или объект на месте момента — отказ с путём поля."""
+    def walk(v, path):
+        if isinstance(v, dict):
+            for k, x in v.items():
+                if k in ACT_MOMENTS and x is not None and (isinstance(x, bool) or not isinstance(x, (int, float))):
+                    raise SystemExit('%s: act — %s.%s = %r: момент — якорь {reply, at} (сборка переводит в секунды), не %s'
+                                     % (sc, path, k, x, type(x).__name__))
+                walk(x, '%s.%s' % (path, k))
+        elif isinstance(v, list):
+            for i, x in enumerate(v):
+                walk(x, '%s[%d]' % (path, i))
+    for c in cues or []:
+        walk(c, 'cues.%s' % (c.get('id', '?') if isinstance(c, dict) else '?'))
 
 
 def clock_config(sc, r):
@@ -707,6 +779,8 @@ def act_config(sc, sb, r, scene_ids):
         else:
             c['m'] = {}
         c['span'] = round(act_span(c['m']), 4)
+        if c['do'] == PEN_DO:
+            pen_config(sc, c, scene_ids)
         if c['who'] == CAM and (c['do'] != 'move' or not c.get('to') or not c.get('motion')):
             raise SystemExit('%s: act — метка камеры %s: нужны do «move», to и motion (числа — tokens.json motion.act)'
                              % (sc, c['id']))
@@ -729,6 +803,136 @@ def act_config(sc, sb, r, scene_ids):
         res['camera'] = {'pos': {n: list(v) for n, v in pos.items()}, 'start': cam[0].get('from') if cam else None,
                          'drift': drift}
     return res
+
+
+def pen_config(sc, c, scene_ids):
+    """Метка act do «write» (буквы «пером», plugins/pen.js): строки lines [{text, x, y, size, align?}] — px в рамке
+    хозяина who (y — базовая линия, size — кегль), from [x, y] — откуда выходит перо (px в рамке хозяина), font —
+    роль шрифта (brand), weight (без поля — самое жирное начертание роли), ink / outline / lead / glow — роли палитры. Числа движения — строка
+    tokens.json motion.act, названная в motion (PEN_KEYS): нет числа — отказ с его именем. Длина записи — until − t,
+    без until — dur. Закон по строкам считает сборка и кладёт в метку (pen: starts, line_span): строка i начинает в
+    t + i · line_lag · L, L = длина / (1 + (N − 1) · line_lag) — последняя кончает ровно в until."""
+    key = '%s: act — метка %s (write)' % (sc, c['id'])
+    m = c['m']
+    if not c.get('motion'):
+        raise SystemExit('%s: нужен motion — строка tokens.json motion.act с числами пера (pen_stem, pen_wire)' % key)
+    miss = [k for k in PEN_KEYS if m.get(k) is None]
+    if miss:
+        raise SystemExit('%s: в tokens.json motion.act.%s нет чисел %s' % (key, c['motion'], ', '.join(miss)))
+    if not PEN_EASE_RE.match(str(m['ease'])):
+        raise SystemExit('%s: motion.act.%s.ease «%s» — перо знает none и power1…4.in / out / inOut' % (key, c['motion'], m['ease']))
+    if c['who'] not in scene_ids:
+        raise SystemExit('%s: who «%s» — такого элемента в сцене нет (перо рисует в рамке элемента)' % (key, c['who']))
+    lines = c.get('lines')
+    if not isinstance(lines, list) or not lines:
+        raise SystemExit('%s: lines — непустой список строк {text, x, y, size, align?}' % key)
+    for i, ln in enumerate(lines):
+        bad = [k for k in PEN_LINE_KEYS if not isinstance(ln, dict) or ln.get(k) in (None, '')]
+        if bad or not isinstance(ln['text'], str) or not all(isinstance(ln[k], (int, float)) for k in ('x', 'y', 'size')) \
+                or ln['size'] <= 0 or ln.get('align', 'left') not in ('left', 'center', 'right'):
+            raise SystemExit('%s: lines[%d] — нужны text (строка), x, y, size (px в рамке хозяина, size > 0), align '
+                             'left | center | right%s' % (key, i, ('; нет ' + ', '.join(bad)) if bad else ''))
+    src = c.get('from')
+    if not (isinstance(src, list) and len(src) == 2 and all(isinstance(v, (int, float)) for v in src)):
+        raise SystemExit('%s: from — точка [x, y], откуда выходит перо (px в рамке хозяина)' % key)
+    if c.get('until') is not None:
+        if not isinstance(c['until'], (int, float)) or c['until'] <= c['t']:
+            raise SystemExit('%s: until (%s) не позже t (%.2f с)' % (key, c['until'], c['t']))
+        c['span'] = round(c['until'] - c['t'], 4)
+    span = c['span']
+    li, cu, lo, fl, lag = (float(m[k]) for k in ('lead_in', 'contour_until', 'lead_out', 'fill_lag', 'line_lag'))
+    if not (0 < li < cu <= 1) or fl < 0 or lo <= 0 or lag < 0 or cu + max(fl, lo) > 1 + 1e-9:
+        raise SystemExit('%s: motion.act.%s — нужно 0 < lead_in < contour_until ≤ 1, contour_until + fill_lag ≤ 1 и '
+                         'contour_until + lead_out ≤ 1 (доли длины записи строки)' % (key, c['motion']))
+    line_span = span / (1 + (len(lines) - 1) * lag)
+    for name, share in (('lead_in', li), ('lead_out', lo)):
+        if share * line_span * P.fps < PEN_MIN_FRAMES - 1e-6:
+            raise SystemExit('%s: %s = %.2f × %.2f с — %.1f кадра: ведущая линия появится или погаснет рывком, нужно не '
+                             'меньше %d кадров (длиннее запись или больше доля)'
+                             % (key, name, share, line_span, share * line_span * P.fps, PEN_MIN_FRAMES))
+    role = c.get('font', 'brand')
+    font = next((f for f in P.fonts if f.get('role', 'brand') == role), None)
+    if font is None:
+        font_family(role, '%s: font' % key)
+    weight = str(c['weight']) if c.get('weight') is not None else max(font['files'], key=int)     # без поля — самое жирное у роли
+    if weight not in font['files']:
+        raise SystemExit('%s: у шрифта роли %s нет начертания %s (есть: %s)' % (key, role, weight, ', '.join(sorted(font['files']))))
+    ink = c.get('ink', 'ink')
+    outline = c.get('outline', ink)
+    colors = {'ink': P.color(ink, '%s: ink' % key), 'outline': P.color(outline, '%s: outline' % key),
+              'lead': P.color(c.get('lead', outline), '%s: lead' % key), 'glow': None}
+    if m.get('glow_frac'):
+        if m.get('glow_alpha') is None:
+            raise SystemExit('%s: в motion.act.%s есть glow_frac, но нет glow_alpha' % (key, c['motion']))
+        colors['glow'] = P.color(c.get('glow', ink), '%s: glow' % key)
+    c['pen'] = {'family': font['family'], 'weight': weight, 'colors': colors, 'line_span': round(line_span, 5),
+                'starts': [round(c['t'] + i * lag * line_span, 5) for i in range(len(lines))]}
+
+
+def lottie_player():
+    """Файл проигрывателя Lottie: MOTION_LOTTIE_PLAYER, иначе пакет lottie-web общей установки Node. Нет — отказ с именем
+    пакета и версией: по сети страница ничего не грузит, проигрыватель вшивается в неё целиком."""
+    p = os.environ.get(LOTTIE_ENV) or LOTTIE_PLAYER
+    if not os.path.exists(p):
+        raise SystemExit('Нет проигрывателя Lottie: %s\n  нужен пакет %s %s (файл build/player/lottie.min.js) — он входит в набор '
+                         'Node движка (engine/video/package.json): поставь набор заново командой установки скила '
+                         '(tools/setup.py install) или npm ci в папке, куда ведёт engine/video/node_modules; свой файл '
+                         'проигрывателя — переменная %s' % (p, LOTTIE_PACKAGE, LOTTIE_VERSION, LOTTIE_ENV))
+    return p
+
+
+def lottie_file(sc, e):
+    """Файл анимации элемента kind «lottie»: путь от корня проекта, иначе от engine/video. Годится только файл, который
+    играет без сети и без кода: адрес http(s) в любом поле, картинка не вшитая в файл и выражения (expressions) — отказ."""
+    p = P.asset(e['src'])
+    if p is None:
+        raise SystemExit('%s: Lottie «%s» — нет файла %s (путь от корня проекта)' % (sc, e['id'], e['src']))
+    try:
+        data = json.loads(read(str(p)).lstrip('\ufeff'))
+    except ValueError as err:
+        raise SystemExit('%s: Lottie «%s» — %s не JSON (%s); файл .lottie (архив) распакуй до animation.json' % (sc, e['id'], p, err))
+    miss = [k for k in LOTTIE_KEYS if not isinstance(data, dict) or k not in data]
+    if miss or not data['fr'] > 0 or not data['op'] - data['ip'] >= 1:
+        raise SystemExit('%s: Lottie «%s» — в %s нет полей %s или анимация короче кадра (fr, ip, op)'
+                         % (sc, e['id'], p, ', '.join(miss) or '—'))
+
+    def walk(v, path):
+        if isinstance(v, dict):
+            for k, x in v.items():
+                if k == 'x' and isinstance(x, str):
+                    raise SystemExit('%s: Lottie «%s» — выражение (expression) в %s.x: кадр перестаёт быть функцией времени '
+                                     'шкалы; запеки выражения в ключи при экспорте' % (sc, e['id'], path))
+                walk(x, '%s.%s' % (path, k))
+        elif isinstance(v, list):
+            for i, x in enumerate(v):
+                walk(x, '%s[%d]' % (path, i))
+        elif isinstance(v, str) and re.match(r'\s*(https?:)?//', v):
+            raise SystemExit('%s: Lottie «%s» — адрес сети в %s («%s…»): при рендере по сети ничего не грузится, вшей '
+                             'ресурс в файл' % (sc, e['id'], path, v[:40]))
+    walk(data, '$')
+    for a in data.get('assets') or []:
+        if isinstance(a, dict) and a.get('p') and not str(a['p']).startswith('data:'):
+            raise SystemExit('%s: Lottie «%s» — картинка «%s» лежит отдельным файлом: экспортируй анимацию со вшитыми '
+                             'картинками (data:) или без них' % (sc, e['id'], a['p']))
+    return str(p), data
+
+
+def lottie_items(sc, sb, at, sl):
+    """Элементы kind «lottie» сцены → данные плагина lottie: at — момент, с которого идёт анимация (якорь {reply, at};
+    без него — начало сцены), speed — во сколько раз быстрее файла, loop — по кругу (иначе держит последний кадр);
+    data — сам файл анимации (вшит в страницу). Кадр анимации в момент t — функция t, не загрузки страницы."""
+    out = []
+    for e in sb.get('elements', []):
+        if e['kind'] != 'lottie':
+            continue
+        path, data = lottie_file(sc, e)
+        speed = float(e.get('speed', 1))
+        if not speed > 0:
+            raise SystemExit('%s: Lottie «%s» — speed %s: скорость больше нуля' % (sc, e['id'], e.get('speed')))
+        out.append({'id': e['id'], 'dom': '%s--%s' % (sc, e['id']), 'src': e['src'],
+                    'at': round(at(e['at'], 'lottie.at') if e.get('at') else sl['start'], 4), 'speed': speed,
+                    'loop': bool(e.get('loop', False)), 'fr': data['fr'], 'ip': data['ip'], 'op': data['op'], 'data': data})
+    return out
 
 
 def scene_camera(sb):
@@ -1148,8 +1352,22 @@ def act_values(tl):
     for s in tl['scenes']:
         a = (s.get('plugins') or {}).get('act')
         if a:
-            out += [{'scene': s['id'], 'id': c['id'], 't': c['t'], 'who': c['who'], 'do': c['do'], 'span': c['span'],
-                     'motion': c.get('motion')} for c in a['cues']]
+            for c in a['cues']:
+                rec = {'scene': s['id'], 'id': c['id'], 't': c['t'], 'who': c['who'], 'do': c['do'], 'span': c['span'],
+                       'motion': c.get('motion')}
+                if c.get('pen'):
+                    rec['pen'] = {'starts': c['pen']['starts'], 'line_span': c['pen']['line_span'],
+                                  'lead_in': c['m']['lead_in'], 'contour_until': c['m']['contour_until'], 'lead_out': c['m']['lead_out']}
+                out.append(rec)
+    return out
+
+
+def lottie_values(tl):
+    """Элементы Lottie в film.json (промер и проверка V39): сцена, id, файл, момент начала, скорость, круг, кадры файла."""
+    out = []
+    for s in tl['scenes']:
+        for it in ((s.get('plugins') or {}).get('lottie') or {}).get('items') or []:
+            out.append(dict({k: it[k] for k in ('id', 'dom', 'src', 'at', 'speed', 'loop', 'fr', 'ip', 'op')}, scene=s['id']))
     return out
 
 
@@ -1160,6 +1378,17 @@ def plugin_probe_times(meta):
     out = []
     for c in meta.get('acts') or []:
         out += [c['t'] - f, c['t'], c['t'] + f, c['t'] + c['span'] / 2, c['t'] + c['span'] + 2 * f]
+        pen = c.get('pen')
+        if pen:           # перо: каждый кадр, пока ведущая линия растёт и пока гаснет (V38 меряет шаг за кадр), и строка в записи
+            ls = pen['line_span']
+            for s0 in pen['starts']:
+                for a, b in ((s0 - f, s0 + pen['lead_in'] * ls + 2 * f),
+                             (s0 + pen['contour_until'] * ls - f, s0 + (pen['contour_until'] + pen['lead_out']) * ls + 2 * f)):
+                    out += [k * f for k in range(int(math.floor(a / f)), int(math.ceil(b / f)) + 1)]
+                out += [s0 + ls * k / 12.0 for k in range(13)] + [s0 + ls + 2 * f]
+    for c in meta.get('lotties') or []:      # Lottie: до начала, начало и десять моментов по длине файла, конец + 2 кадра
+        n = (c['op'] - c['ip']) / float(c['fr']) / c['speed']
+        out += [c['at'] - f, c['at'], c['at'] + f] + [c['at'] + n * k / 10.0 for k in range(1, 11)] + [c['at'] + n + 2 * f]
     for c in meta.get('clocks') or []:
         s = [x for x in meta['scenes'] if x['id'] == c['scene']][0]
         out += [s['start'], s['start'] + 1.0, s['first']]
@@ -1180,7 +1409,10 @@ PAGE = '''<!doctype html>
 <meta name="viewport" content="width=%(w)d, height=%(h)d">
 <title>%(title)s</title>
 <script src="assets/gsap.min.js"></script>
-<style>
+<script data-lib="stage-fonts">
+%(fonts_js)s
+</script>
+%(libs)s<style>
 %(fonts)s
 %(tokens)s
 %(css)s
@@ -1205,6 +1437,76 @@ PAGE = '''<!doctype html>
 </body>
 </html>
 '''
+
+
+def script_json(data):
+    """Данные для <script> страницы: JSON, в котором нет знака «<» (он записан кодом u003c с обратной чертой, значение
+    строки то же).
+    Содержимое <script> браузер кончает на первом «</script», что бы ни стояло вокруг в JavaScript, а «<!--» с
+    «<script» включают режим, где настоящий «</script>» скрипт уже не закрывает. В данные фильма попадает чужое — файл
+    анимации Lottie вшивается целиком, имена его слоёв любые: строка «</script><script>…» стала бы на странице вторым,
+    исполняемым скриптом (промеры открывают страницу без песочницы). Разделители строк U+2028 и U+2029 — тоже кодом."""
+    text = json.dumps(data, ensure_ascii=False, separators=(',', ':'))
+    return text.replace('<', '\\u003c').replace('\u2028', '\\u2028').replace('\u2029', '\\u2029')
+
+
+def film_libs(film):
+    """films/<f>.json "libs": [<путь от корня проекта>.js] — библиотеки проекта в <head>, до разметки сцен (разметка зовёт
+    их уже при разборе: CardKit.entry). Плагины ("plugins") идут после разметки; libs — раньше. Нет файла — отказ."""
+    out = []
+    for rel in film.get('libs') or []:
+        p = os.path.join(str(P.root), rel)
+        own = os.path.join(LIBS_DIR, rel + '.js')       # имя без пути — библиотека движка: engine/video/libs/<имя>.js
+        if not os.path.exists(p) and re.match(r'^[a-z0-9-]+$', rel) and os.path.exists(own):
+            p = own
+        if not os.path.isfile(p):
+            raise SystemExit('films "libs": нет файла %s (путь от корня проекта) и нет библиотеки движка %s' % (p, own))
+        out.append('<script data-lib="%s">\n%s\n</script>\n' % (html.escape(rel), read(p)))
+    return ''.join(out)
+
+
+STILL_DO = ('gather', 'windows', 'dive', 'peel', 'rise', 'write')     # действия act, чью середину снимают дважды (детерминизм)
+
+
+def film_stills(film, meta, tl_by):
+    """films/<f>.json "stills": true | {"frame0": {"lum": [от, до], "sigma": мин}} — кадры для промера пикселей
+    (probe_frames.mjs, проверка V41): кадр 0, пара кадров каждого шва (последний кадр сцены N и первый N+1) и кадры
+    детерминизма — середины действий act с длиной (сборка фразы, окна, нырок, запись пером), моменты меток с ключом
+    key и три момента каждой анимации Lottie. Номер кадра — то же округление, что у рендера."""
+    if not film.get('stills'):
+        return None
+    fps = meta['fps']
+    last = frame_count(meta['duration'], fps) - 1
+
+    def fo(t):
+        return max(0, min(last, int(round(t * fps))))
+    seams = []
+    for a, b in zip(meta['scenes'], meta['scenes'][1:]):
+        fb = fo(b['start'])
+        seams.append({'from': a['id'], 'to': b['id'], 'a': max(0, fb - 1), 'b': fb})
+    det, wins = set(), []
+    for s in meta['scenes']:
+        for q in ((tl_by[s['id']].get('plugins') or {}).get('act') or {}).get('cues') or []:
+            if q.get('do') == 'windows':      # окна раскрыты (t + длина + 2 кадра), но не позже кадра до нырка: тень по пикселям
+                dv = [x['t'] for x in ((tl_by[s['id']].get('plugins') or {}).get('act') or {}).get('cues') or [] if x.get('do') == 'dive']
+                f = fo(q['t'] + q['span']) + 2
+                if dv:
+                    f = min(f, fo(min(dv)) - 1)
+                wins.append({'scene': s['id'], 'cue': q['id'], 'f': f})
+            if q.get('span') and q.get('do') in STILL_DO:
+                det.add(fo(q['t'] + q['span'] / 2))
+            if q.get('key'):
+                det.add(fo(q['t']))
+    for c in meta.get('lotties') or []:
+        n = (c['op'] - c['ip']) / float(c['fr']) / c['speed']
+        det |= {fo(c['at'] + n * k) for k in (0.25, 0.5, 0.75)}
+    # живость предметов (V41, needs N19): кадры с шагом card_live.alive_frame_step_sec в масштабе alive_frame_scale (tokens.json)
+    al = (((P.tokens.get('motion') or {}).get('act') or {}).get('card_live')) or {}
+    live = None
+    if al.get('alive_frame_step_sec') and al.get('alive_frame_scale'):
+        step = max(1, int(round(float(al['alive_frame_step_sec']) * fps)))
+        live = {'frames': list(range(0, last + 1, step)), 'scale': float(al['alive_frame_scale'])}
+    return {'frame0': 0, 'seams': seams, 'det': sorted(det), 'windows': wins, 'live': live}
 
 
 def read(p):
@@ -1276,8 +1578,14 @@ def build_page(film_name, film, sbs, out_dir, estimate, forced_style=None):
             raise SystemExit('Нет манифеста звука %s (флаг --estimate — сборка по смете)' % film.get('manifest'))
         raise SystemExit('Нет манифеста звука и строк для сметы: положи replies в фильм или манифест')
     rows = [r for r in rows if r['scene'] in names]
-    for v in sorted({r['voice'] for r in rows}):
+    lost = [n for n in names if not any(r['scene'] == n for r in rows)]
+    if lost:      # у сцены нет шкалы времени: фильму без диктора её дают немые строки (silent, ms), не пустота
+        raise SystemExit('У сцены %s нет ни одной строки шкалы. Ролик без голоса: добавь в манифест немые строки '
+                         '{n, scene, voice, ms, scene_start, silent: true} по тактам музыки — якоря {reply: n, at} '
+                         'встанут на них (profiles/card.md)' % ', '.join(lost))
+    for v in sorted({r['voice'] for r in rows if not r.get('silent')}):
         P.voice_gain_db(v)        # голоса нет в voices.json — отказ сборки здесь, а не тихий 0 дБ в сведении
+    # немая строка в сведение не идёт (engine/audio берёт только строки с файлом): её голос — метка, voices.json не нужен
     durations, mouths = {}, {}
     for r in rows:
         if r.get('silent'):           # немая строка: длина — ms строки, рот закрыт
@@ -1323,8 +1631,9 @@ def build_page(film_name, film, sbs, out_dir, estimate, forced_style=None):
             if os.path.exists(p):
                 os.remove(p)
     os.makedirs(os.path.join(out_dir, 'assets'), exist_ok=True)
-    if not os.path.exists(GSAP):
-        raise SystemExit('Нет %s: скопируй node_modules (hyperframes, gsap, puppeteer-core) в engine/video — ничего не ставить' % GSAP)
+    lost = deps.missing(chrome=True)
+    if lost:              # нет Node, набора Node (gsap, hyperframes, puppeteer-core) или Chrome — названо, чем поставить
+        raise SystemExit('ОШИБКА: сборке не хватает программ\n  ' + '\n  '.join(deps.report(lost)))
     shutil.copyfile(GSAP, os.path.join(out_dir, 'assets', 'gsap.min.js'))
     content = []
     for sb in sbs:
@@ -1379,6 +1688,9 @@ def build_page(film_name, film, sbs, out_dir, estimate, forced_style=None):
     data['frame_mixed'] = len({s['frame'] for s in data['scenes']}) > 1
     used_plugins = sorted({n for s in data['scenes'] for n in s['plugins']})
     plugins = ''.join('<script>\n%s\n</script>\n' % read(os.path.join(str(P.root), p)) for p in film.get('plugins', []))
+    libs = film_libs(film)
+    if 'lottie' in used_plugins:       # проигрыватель Lottie — в <head>, целиком в странице: по сети ничего не грузится
+        libs += '<script data-lib="%s">\n%s\n</script>\n' % (LOTTIE_PACKAGE, read(lottie_player()))
     plugins += ''.join('<script data-plugin="%s">\n%s\n</script>\n' % (n, read(os.path.join(PLUGINS_DIR, n + '.js')))
                        for n in used_plugins)
     page = PAGE % {
@@ -1387,9 +1699,10 @@ def build_page(film_name, film, sbs, out_dir, estimate, forced_style=None):
         'css': read(os.path.join(HERE, 'lib', 'stage.css')),
         'duration': tl['duration'], 'fps': tl['fps'],
         'frame': frame_html(sbs, numbers, voice_on), 'content': '\n'.join(content),
-        'film': json.dumps(data, ensure_ascii=False, separators=(',', ':')),
-        'plugins': plugins + style_js, 'style_css': style_css, 'font_warm': font_warm + font_warm_html(),
+        'film': script_json(data),
+        'plugins': plugins + style_js, 'libs': libs, 'style_css': style_css, 'font_warm': font_warm + font_warm_html(),
         'stage_js': read(os.path.join(HERE, 'lib', 'stage.js')),
+        'fonts_js': read(os.path.join(HERE, 'lib', 'fonts.js')),      # правило «шрифт загружен» — до библиотек фильма
     }
     with open(os.path.join(out_dir, 'index.html'), 'w', encoding='utf-8') as fh:
         fh.write(page)
@@ -1422,9 +1735,11 @@ def build_page(film_name, film, sbs, out_dir, estimate, forced_style=None):
                         if any(e['style'] == 'flash' for e in n['emph'])],
             'voice_bars': voice_on, 'tail_sec': tail_sec,
             'timeline_offset_sec': offset, 'timers': timers, 'clocks': clocks, 'acts': acts, 'hidden': sorted(hidden),
+            'lotties': lottie_values(tl),
             'glitch_windows': [[s['id'], s['plugins']['glitch']['from'], s['plugins']['glitch']['to']]
                                for s in tl['scenes'] if (s.get('plugins') or {}).get('glitch')]}
     meta['probe_times'] = sorted(set(meta['probe_times']) | set(plugin_probe_times(meta)))
+    meta['stills'] = film_stills(film, meta, tl_by)
     with open(os.path.join(out_dir, 'film.json'), 'w', encoding='utf-8') as fh:
         json.dump(meta, fh, ensure_ascii=False, indent=1)
     log('  страница: %s · %.2f с · %d реплик · %d событий · %.1f с сборки'
@@ -1441,10 +1756,11 @@ def hf_env():
     return env
 
 
-def ensure_ffprobe_stub():
+def ensure_ffprobe_stub(windows=None):
     """Заглушка ffprobe: готовый tools/ffprobe.exe; нет его — собрать csc.exe из .NET Framework (Windows).
-    Не Windows: заглушка-exe там не запустится — берётся настоящий ffprobe из PATH (пакет ffmpeg системы)."""
-    if os.name != 'nt':
+    Не Windows: заглушка-exe там не запустится — берётся настоящий ffprobe из PATH (пакет ffmpeg системы).
+    windows — признак платформы для теста; по умолчанию настоящая."""
+    if not ((os.name == 'nt') if windows is None else windows):
         real = shutil.which('ffprobe')
         if not real:
             raise SystemExit('Нет ffprobe в PATH: поставь ffmpeg пакетом системы (brew install ffmpeg / apt install ffmpeg)')
@@ -1556,146 +1872,442 @@ def sheet_picks(meta):
     return out
 
 
-def chunk_page(out_dir, frame0, frames, fps):
-    """Страница куска: та же index.html, длительность — frames кадров, её кадр j = кадр frame0 + j фильма."""
+def render_cfg():
+    """Настройки рендера — project.json, блок render: {"workers": "auto" | число, "frame_budget_ms": число,
+    "draft": {"scale": доля размера кадра, "fps": кадров в секунду}}. Блока или ключа нет (проект старше блока) —
+    воркеры по машине, бюджета нет (тревоги тоже), черновик DRAFT_DEFAULT."""
+    r = P.project.get('render') or {}
+    w = r.get('workers', 'auto')
+    if w != 'auto' and not (isinstance(w, int) and not isinstance(w, bool) and 1 <= w <= 24):
+        raise SystemExit('project.json render.workers: "auto" или целое от 1 до 24, а не %r' % (w,))
+    b = r.get('frame_budget_ms')
+    if b is not None and not (isinstance(b, (int, float)) and not isinstance(b, bool) and b > 0):
+        raise SystemExit('project.json render.frame_budget_ms: положительное число миллисекунд на кадр, а не %r' % (b,))
+    d = dict(DRAFT_DEFAULT)
+    d.update({k: v for k, v in (r.get('draft') or {}).items() if not k.startswith('_')})
+    ok = all(isinstance(d.get(k), (int, float)) and not isinstance(d.get(k), bool) for k in ('scale', 'fps'))
+    if not ok or not 0 < d['scale'] <= 1 or not 1 <= d['fps'] <= P.fps:
+        raise SystemExit('project.json render.draft: scale — доля размера кадра (0…1], fps — от 1 до частоты проекта %s; '
+                         'сейчас %r' % (P.fps, r.get('draft')))
+    return {'workers': w, 'frame_budget_ms': b, 'draft': d}
+
+
+def auto_workers(cores=None, free_ram=None):
+    """Воркеры захвата по машине: две трети ядер (воркер — свой Chrome; без видеокарты растеризация программная
+    и сама занимает больше одного ядра), но не больше, чем хватает свободной памяти (WORKER_RAM на воркер)."""
+    cores = cores or os.cpu_count() or 1
+    if free_ram is None:
+        free_ram = resources.ram_bytes()[0]
+    w = max(1, cores * 2 // 3)
+    if free_ram:
+        w = min(w, max(1, int(free_ram // WORKER_RAM)))
+    return min(w, 24)
+
+
+def pick_workers(arg):
+    """Число воркеров и откуда оно: --workers → project.json render.workers; "auto" — по ядрам и памяти."""
+    src = '--workers' if arg is not None else 'project.json render.workers'
+    val = arg if arg is not None else render_cfg()['workers']
+    if str(val) != 'auto':
+        try:
+            n = int(val)
+        except ValueError:
+            n = 0
+        if not 1 <= n <= 24:
+            raise SystemExit('%s: "auto" или целое от 1 до 24, а не %r' % (src, val))
+        return n, '%s: %d' % (src, n)
+    cores, free = os.cpu_count() or 1, resources.ram_bytes()[0]
+    n = auto_workers(cores, free)
+    ram = ('свободно %.1f ГБ ОЗУ' % (free / 1e9)).replace('.', ',') if free else 'ОЗУ не узнать'
+    return n, '%s: auto — %d ядер, %s' % (src, cores, ram)
+
+
+def hf_version():
+    try:
+        with open(os.path.join(HERE, 'node_modules', 'hyperframes', 'package.json'), encoding='utf-8') as fh:
+            return json.load(fh).get('version')
+    except (OSError, ValueError):
+        return None
+
+
+def capture_mode(draft):
+    """Чем и каким снимается кадр: {fps, size — кадр ролика, grab — кадр захвата, preset — пресет HyperFrames или
+    None, hyperframes — версия}. Финал — полотно и частота проекта. Черновик — project.json render.draft: частота
+    fps, кадр ролика = полотно × scale; захват — ближайшим к scale пресетом HyperFrames (--resolution: Chrome сам
+    рисует меньший кадр — меньше пикселей в растеризации, размытиях и PNG), до точного размера доводит ffmpeg."""
+    mode = {'fps': P.fps, 'size': [P.W, P.H], 'grab': [P.W, P.H], 'preset': None, 'hyperframes': hf_version()}
+    if not draft:
+        return mode
+    d = render_cfg()['draft']
+    mode['fps'] = d['fps']
+    mode['size'] = [max(2, int(round(P.W * d['scale'] / 2.0)) * 2), max(2, int(round(P.H * d['scale'] / 2.0)) * 2)]
+    fit = {n: max(w / P.W, h / P.H) for n, (w, h) in HF_PRESETS.items()
+           if abs(w / h - P.W / P.H) < HF_ASPECT_TOL and w < P.W}
+    if fit:
+        name = min(fit, key=lambda n: abs(math.log(fit[n] / d['scale'])))
+        if abs(math.log(fit[name] / d['scale'])) < abs(math.log(1.0 / d['scale'])):
+            mode['preset'] = name
+            mode['grab'] = [int(round(P.W * fit[name])), int(round(P.H * fit[name]))]
+    return mode
+
+
+def scene_plan(meta, fps):
+    """Кадры сцен в частоте fps: [{id, k0, n}] — кадр k (с нуля) стоит в моменте k / fps; сцена берёт кадры
+    от своего начала до своего конца, последняя — до конца фильма. Сумма n = числу кадров фильма."""
+    total = frame_count(meta['duration'], fps)
+    plan, k = [], 0
+    for i, s in enumerate(meta['scenes']):
+        k1 = total if i == len(meta['scenes']) - 1 else max(k, min(total, int(math.ceil(s['end'] * fps - 1e-6))))
+        plan.append({'id': s['id'], 'k0': k, 'n': k1 - k})
+        k = k1
+    return plan
+
+
+def render_span(opt, meta, plan, fps):
+    """Какие кадры нужны: (первый, за последним, имя отрезка или None — фильм целиком)."""
+    full = plan[-1]['k0'] + plan[-1]['n']
+    if opt.get('scene'):
+        hit = [s for s in plan if s['id'] == opt['scene']]
+        if not hit:
+            raise SystemExit('--scene %s: такой сцены в сборке нет (есть: %s)' % (opt['scene'], ', '.join(s['id'] for s in plan)))
+        return hit[0]['k0'], hit[0]['k0'] + hit[0]['n'], 'scene-%s' % opt['scene']
+    if opt.get('start') is not None or opt.get('end') is not None:
+        t0 = float(opt['start'] or 0.0)
+        t1 = float(opt['end']) if opt.get('end') is not None else meta['duration']
+        ka = max(0, int(math.ceil(t0 * fps - 1e-6)))
+        kb = min(full, int(math.ceil(t1 * fps - 1e-6)))
+        if not 0 <= t0 < t1 or ka >= kb:
+            raise SystemExit('--start %s --end %s: в отрезке нет кадров (фильм — %.2f с)' % (opt.get('start'), opt.get('end'), meta['duration']))
+        return ka, kb, 'range-%.2f-%.2f' % (ka / fps, kb / fps)
+    if opt.get('max_frames'):
+        return 0, min(full, int(opt['max_frames'])), None
+    return 0, full, None
+
+
+def chunk_page(out_dir, k0, n, fps, film_fps):
+    """Страница куска: та же index.html, длительность — n кадров частоты fps, её кадр j — момент (k0 + j) / fps фильма.
+    Финал (fps — частота фильма): время — тем же делением номера кадра на fps, что у HyperFrames, кадр куска
+    совпадает с кадром цельного рендера бит в бит. Черновик (fps ниже): страница — та же страница фильма, меняется
+    только шаг; рантайм ставит ближайший кадр фильма (lib/stage.js, filmTime)."""
     page = read(os.path.join(out_dir, 'index.html'))
-    page, n = re.subn(r'(<div id="root"[^>]*?data-duration=")[^"]*(")',
-                      lambda m: m.group(1) + repr(frames / fps) + m.group(2), page, count=1)
-    if n != 1:
+    page, c = re.subn(r'(<div id="root"[^>]*?data-duration=")[^"]*(")',
+                      lambda m: m.group(1) + repr(n / fps) + m.group(2), page, count=1)
+    if c != 1:
         raise SystemExit('В index.html нет data-duration у #root')
+    frame0, frames = k0, n
+    if fps != film_fps:
+        page, c = re.subn(r'(<div id="root"[^>]*?data-fps=")[^"]*(")',
+                          lambda m: m.group(1) + '%g' % fps + m.group(2), page, count=1)
+        if c != 1:
+            raise SystemExit('В index.html нет data-fps у #root')
+        frame0, frames = int(round(k0 * film_fps / fps)), n * film_fps / fps
     head = '<script>window.__FILM__'
     if page.count(head) != 1:
         raise SystemExit('В index.html нет ровно одного window.__FILM__')
-    page = page.replace(head, '<script>window.__CHUNK__ = {"frame0": %d, "frames": %d};</script>\n%s' % (frame0, frames, head))
+    page = page.replace(head, '<script>window.__CHUNK__ = {"frame0": %d, "frames": %s};</script>\n%s'
+                        % (frame0, json.dumps(frames), head))
     with open(os.path.join(out_dir, CHUNK_PAGE), 'w', encoding='utf-8') as fh:
         fh.write(page)
     return CHUNK_PAGE
 
 
-def start_encoder(out_dir, meta, crf):
-    """Один ffmpeg на весь фильм: кадры PNG идут в stdin по мере рендера кусков, звук сводится один раз
-    на всю длину — шва между кусками нет ни в картинке, ни в звуке. Громкость голоса — voices.json gain_db."""
-    dst = os.path.join(out_dir, 'video.mp4')
-    cmd = [lipsync.ffmpeg_exe(), '-v', 'error', '-y', '-f', 'image2pipe', '-c:v', 'png',
-           '-framerate', str(meta['fps']), '-i', '-']
+def hf_capture(rc, k0, n, tag):
+    """Один вызов HyperFrames: кадры k0 … k0 + n − 1 (с нуля, в частоте режима) → (пути PNG по порядку во временной
+    папке, мс захвата по журналу HyperFrames — без запуска и компиляции). Только под замком Chrome."""
+    out_dir, mode, fh = rc['out_dir'], rc['mode'], rc['fh']
+    name = chunk_page(out_dir, k0, n, mode['fps'], rc['film_fps'])
+    cdir = os.path.join(rc['work'], tag)
+    workers = max(1, min(rc['workers'], -(-n // WORKER_FRAMES)))     # короткому куску лишний Chrome дороже выигрыша
+    cmd = ['node', HF_BIN, 'render', out_dir, '-c', name, '--format', 'png-sequence', '--workers', str(workers), '-o', cdir]
+    if mode['preset']:
+        cmd += ['--resolution', mode['preset']]
+    fh.write('\n==== %s: кадры %d–%d, воркеров %d\n' % (tag, k0 + 1, k0 + n, workers))
+    fh.flush()
+    at = os.path.getsize(rc['logp'])
+    t = time.time()
+    r = subprocess.run(cmd, env=rc['env'], stdout=fh, stderr=subprocess.STDOUT, cwd=out_dir)
+    if r.returncode:
+        raise SystemExit('Рендер HyperFrames упал на %s (код %d), журнал: %s' % (tag, r.returncode, rc['logp']))
+    got = sorted(f for f in os.listdir(cdir) if f.endswith('.png')) if os.path.isdir(cdir) else []
+    if len(got) != n:
+        raise SystemExit('%s: ждали %d кадров, HyperFrames дал %d (%s)' % (tag, n, len(got), cdir))
+    with open(rc['logp'], 'rb') as lf:
+        lf.seek(at)
+        text = lf.read().decode('utf-8', 'replace')
+    ms = re.findall(r'"phase":"capture_disk","status":"end"[^\n]*?"durationMs":(\d+)', text)
+    how = re.search(r'"captureMode":"([A-Za-z_-]+)"', text)
+    if how:
+        rc['capture'] = how.group(1) + (' · software gpu' if 'software gpu' in text else '')
+    return [os.path.join(cdir, f) for f in got], (float(ms[-1]) if ms else (time.time() - t) * 1000.0)
+
+
+def same_frame(a, b):
+    """Один ли это кадр: те же байты файла или те же пиксели (RGBA)."""
+    if not (os.path.exists(a) and os.path.exists(b)):
+        return False
+    with open(a, 'rb') as fa, open(b, 'rb') as fb:
+        if fa.read() == fb.read():
+            return True
+    from PIL import Image
+    ia, ib = Image.open(a).convert('RGBA'), Image.open(b).convert('RGBA')
+    return ia.size == ib.size and ia.tobytes() == ib.tobytes()
+
+
+def seam_same(rc, job, side):
+    """Сосед по шву изменился, сама сцена — нет: окно шва (stamp.seam_window) снимается заново и сравнивается с кадрами
+    кэша. Все кадры те же — правка соседа до этой сцены не дошла, кэш годится."""
+    fps, root = rc['mode']['fps'], rc['root']
+    w0, w1 = frame_stamp.scene_print(rc['out_dir'], job['id'])['window'][side]
+    a = job['k0'] if side == 'prev' else max(job['k0'], int(math.ceil(w0 * fps - 1e-6)))
+    b = job['k0'] + job['n'] if side == 'next' else min(job['k0'] + job['n'], int(math.ceil(w1 * fps - 1e-6)))
+    if a >= b:
+        return True
+    files, _ = hf_capture(rc, a, b - a, 'seam-%s-%s' % (job['id'], side))
+    sdir = frame_stamp.scene_dir(rc['out_dir'], job['id'], root)
+    same = all(same_frame(f, os.path.join(sdir, 'frame_%06d.png' % (a + i + 1))) for i, f in enumerate(files))
+    shutil.rmtree(os.path.dirname(files[0]), ignore_errors=True)
+    return same
+
+
+def render_group(rc, group, chunk_sec, budget):
+    """Захват сцен группы (подряд идущие кадры одним проходом кусков) в кэш: frames/<сцена>/frame_%06d.png и отметка
+    сцены, строка «сцена <id>: <N> кадров, <X> мс/кадр» в журнал, тревога при превышении бюджета."""
+    out_dir, mode, root, fps = rc['out_dir'], rc['mode'], rc['root'], rc['mode']['fps']
+    for j in group:                       # прежние кадры сцены уходят только здесь: замок уже взят
+        d = frame_stamp.scene_dir(out_dir, j['id'], root)
+        if os.path.exists(d):
+            shutil.rmtree(d)
+        os.makedirs(d)
+    a, b = group[0]['a'], group[-1]['b']
+    per = max(1, int(round(chunk_sec * fps)))
+    if b - a > per * CHUNK_STRETCH:       # куски ровные: короткий хвост стоил бы целого запуска HyperFrames (≈ 10 с)
+        per = -(-(b - a) // -(-(b - a) // per))
+    else:
+        per = b - a
+    ms_total, tg = 0.0, time.time()
+    for c0 in range(a, b, per):
+        cn = min(per, b - c0)
+        files, ms = hf_capture(rc, c0, cn, 'chunk-%06d' % c0)
+        ms_total += ms
+        for i, f in enumerate(files):
+            k = c0 + i
+            j = next(x for x in group if x['a'] <= k < x['b'])
+            shutil.move(f, os.path.join(frame_stamp.scene_dir(out_dir, j['id'], root), 'frame_%06d.png' % (k + 1)))
+        shutil.rmtree(os.path.dirname(files[0]), ignore_errors=True)
+        for j in group:                   # сцена снята целиком — отметка сразу: оборванный рендер начнёт со следующей
+            if j['whole'] and j['b'] <= c0 + cn and not j.get('stamped'):
+                frame_stamp.scene_write(out_dir, j['id'], j['k0'] + 1, j['n'], mode, root, workers=rc['workers'],
+                                        ms_per_frame=round(ms_total / (c0 + cn - a), 1), capture=rc.get('capture'))
+                j['stamped'] = True
+    x = ms_total / (b - a)
+    shared = ' · общий захват сцен %s' % ', '.join(j['id'] for j in group) if len(group) > 1 else ''
+    for j in group:
+        rc['note']('сцена %s: %d кадров, %.0f мс/кадр%s%s · %s' % (
+            j['id'], j['b'] - j['a'], x, '' if j['whole'] else ' · отрезок сцены, в кэш не идёт', shared, '; '.join(j['why'])))
+        if budget and x > budget:
+            rc['note']('ТРЕВОГА: сцена %s — %.0f мс/кадр при бюджете %s мс (project.json render.frame_budget_ms): кадр '
+                       'тяжёлый — ищи большие filter: blur(), backdrop-filter и тени; неподвижное размытие запекай в картинку'
+                       % (j['id'], x, ('%g' % budget)), plain=True)
+    log('  захват %s: %d кадров · %.1f с' % (', '.join(j['id'] for j in group), b - a, time.time() - tg))
+
+
+def encode(out_dir, meta, mode, files, t0, whole, dst, draft):
+    """Один ffmpeg на весь отрезок: кадры PNG по порядку идут в stdin, звук реплик сводится один раз на всю длину —
+    шва между сценами нет ни в картинке, ни в звуке. Громкость голоса — voices.json gain_db. Отрезок (--scene,
+    --start/--end) несёт звук своего промежутка. Запись атомарна: недописанный mp4 не выдаётся за готовый."""
+    fps, tmp = mode['fps'], dst + '.part.mp4'
+    dur = meta['duration'] if whole else len(files) / fps
+    cmd = [lipsync.ffmpeg_exe(), '-v', 'error', '-y', '-f', 'image2pipe', '-c:v', 'png', '-framerate', str(fps), '-i', '-']
     voiced = [r for r in meta['replies'] if r.get('file') and not meta['estimate']]
     for r in voiced:
         cmd += ['-i', os.path.join(str(P.root), r['file'])]
+    cut = '' if whole else ',atrim=start=%.4f,asetpts=PTS-STARTPTS' % t0
     if voiced:
         chains = ['[%d:a]aresample=44100,aformat=channel_layouts=mono,volume=%.4fdB,adelay=%d:all=1[a%d]'
                   % (i + 1, P.voice_gain_db(r['voice']), round(r['start'] * 1000), i) for i, r in enumerate(voiced)]
         mix = ''.join('[a%d]' % i for i in range(len(voiced)))
-        fc = ';'.join(chains) + ';%samix=inputs=%d:normalize=0:dropout_transition=0,apad[aout]' % (mix, len(voiced))
+        fc = ';'.join(chains) + ';%samix=inputs=%d:normalize=0:dropout_transition=0,apad%s[aout]' % (mix, len(voiced), cut)
     else:
         cmd += ['-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=mono']
         fc = '[1:a]anull[aout]'
-    cmd += ['-filter_complex', fc, '-map', '0:v', '-map', '[aout]', '-t', '%.4f' % meta['duration'],
-            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', str(crf), '-preset', 'medium',
-            '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', dst]
-    return subprocess.Popen(cmd, stdin=subprocess.PIPE), dst
-
-
-def render(out_dir, meta, workers, chunk_sec, tmp, crf, keep_frames, png_only=False, max_frames=None):
-    """Рендер по кускам времени: кусок → PNG во временной папке → в кодер → удалить. На диске одновременно
-    не больше двух кусков, поэтому пик места зависит от длины куска, а не фильма.
-    png_only — без mp4: кадры остаются в <out>/frames/frame_%06d.png с отметкой frames/stamp.json (кусок для
-    assemble.py); max_frames — только первые N кадров (пробный кусок). Chrome — под замком (engine/chrome_lock.py)."""
-    log('  ' + resources.report(tmp))
-    log('  ' + resources.report(out_dir))
-    fps = meta['fps']
-    full = total = frame_count(meta['duration'], fps)
-    if max_frames:
-        total = min(total, int(max_frames))
-    keep_frames = keep_frames or png_only
-    per = max(1, int(round(chunk_sec * fps)))
-    chunks = [(f0, min(per, total - f0)) for f0 in range(0, total, per)]
-    work = os.path.join(tmp, '%s-%d' % (os.path.basename(out_dir), os.getpid()))
-    if os.path.exists(work):
-        shutil.rmtree(work)
-    hf_tmp = os.path.join(work, 'hf-temp')
-    os.makedirs(hf_tmp)
-    kept = os.path.join(out_dir, 'frames')
-    if keep_frames:               # кадры прошлого куска заменяются; рендер в mp4 без --keep-frames их не трогает
-        if os.path.exists(kept):
-            shutil.rmtree(kept)
-        os.makedirs(kept)
-    picks = sheet_picks(meta)
-    sdir = os.path.join(out_dir, 'sheet')
-    if os.path.exists(sdir):
-        shutil.rmtree(sdir)
-    os.makedirs(sdir)
-    env = hf_env()
-    env['TEMP'] = env['TMP'] = env['TMPDIR'] = hf_tmp
-    logp = os.path.join(out_dir, 'render.log')
-    peak = DiskPeak(work)
-    peak.start()
-    enc, dst = (None, None) if png_only else start_encoder(out_dir, meta, crf)
-    feeder = None
-    t0 = time.time()
-    lock = chrome_lock.held('build.py render %s' % out_dir)
-    lock.__enter__()
+    vmap = '0:v'
+    if draft:                             # кадр захвата — пресет HyperFrames; кадр ролика — ровно полотно × scale
+        fc += ';[0:v]scale=%d:%d:flags=bicubic,setsar=1[vout]' % tuple(mode['size'])
+        vmap = '[vout]'
+    cmd += ['-filter_complex', fc, '-map', vmap, '-map', '[aout]', '-t', '%.4f' % dur,
+            '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', str(DRAFT_CRF if draft else FINAL_CRF),
+            '-preset', DRAFT_PRESET if draft else FINAL_PRESET,
+            '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', tmp]
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    enc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+    feeder = Feeder(enc, files, False, None)
+    feeder.start()
     try:
-        with open(logp, 'w', encoding='utf-8') as fh:
-            fh.write('рендер по кускам: %d кадров, %d кусков по %d кадров, временная папка %s\n' % (total, len(chunks), per, work))
-            for k, (f0, n) in enumerate(chunks):
-                cdir = os.path.join(work, 'chunk-%03d' % k)
-                name = chunk_page(out_dir, f0, n, fps)
-                fh.write('\n==== кусок %d/%d: кадры %d–%d\n' % (k + 1, len(chunks), f0 + 1, f0 + n))
-                fh.flush()
-                tk = time.time()
-                r = subprocess.run(['node', HF_BIN, 'render', out_dir, '-c', name, '--format', 'png-sequence',
-                                    '--workers', str(workers), '-o', cdir], env=env, stdout=fh, stderr=subprocess.STDOUT, cwd=out_dir)
-                if r.returncode:
-                    raise SystemExit('Рендер HyperFrames упал на куске %d (код %d), журнал: %s' % (k + 1, r.returncode, logp))
-                got = sorted(f for f in os.listdir(cdir) if f.endswith('.png'))
-                if len(got) != n:
-                    raise SystemExit('Кусок %d: ждали %d кадров, HyperFrames дал %d (%s)' % (k + 1, n, len(got), cdir))
-                files = []
-                for j, f in enumerate(got):
-                    src = os.path.join(cdir, f)
-                    if keep_frames:
-                        moved = os.path.join(kept, 'frame_%06d.png' % (f0 + j + 1))
-                        shutil.move(src, moved)
-                        src = moved
-                    files.append(src)
-                for idx, _, sname in picks:
-                    if f0 < idx <= f0 + n:
-                        shutil.copyfile(files[idx - f0 - 1], os.path.join(sdir, sname))
-                if feeder is not None:
-                    feeder.finish()
-                if png_only:
-                    shutil.rmtree(cdir, ignore_errors=True)
-                else:
-                    feeder = Feeder(enc, files, not keep_frames, cdir)
-                    feeder.start()
-                log('  кусок %d/%d: %d кадров · %.1f с · временных кадров на диске %.3f ГБ'
-                    % (k + 1, len(chunks), n, time.time() - tk, dir_bytes(work) / 1e9))
-            if feeder is not None:
-                feeder.finish()
-        if enc is not None:
-            enc.stdin.close()
-            if enc.wait():
-                raise SystemExit('ffmpeg не собрал mp4 (код %d)' % enc.returncode)
+        feeder.finish()
+        enc.stdin.close()
+        if enc.wait():
+            raise SystemExit('ffmpeg не собрал mp4 (код %d)' % enc.returncode)
     except BaseException:
-        if enc is not None and enc.poll() is None:
+        if enc.poll() is None:
             enc.kill()
+            enc.wait()
+        if os.path.exists(tmp):
+            os.remove(tmp)
         raise
-    finally:
-        lock.__exit__(None, None, None)
-        peak.stop()
-        p = os.path.join(out_dir, CHUNK_PAGE)
-        if os.path.exists(p):
+    os.replace(tmp, dst)
+    return dst
+
+
+def prune_frames(out_dir, root, keep):
+    """В папке кадров остаются только сцены keep: кадры сцен, которых в фильме больше нет, устаревшие сцены и плоская
+    последовательность прежних версий уходят — отметка куска ручается за всё, что лежит в папке."""
+    d = os.path.join(out_dir, root)
+    if not os.path.isdir(d):
+        return
+    for name in os.listdir(d):
+        p = os.path.join(d, name)
+        if os.path.isdir(p) and name not in keep:
+            shutil.rmtree(p, ignore_errors=True)
+        elif os.path.isfile(p) and frame_stamp.FRAME_RE.match(name):
             os.remove(p)
-        shutil.rmtree(work, ignore_errors=True)
-    if keep_frames:
-        frame_stamp.write(out_dir, total, full, fps, (P.W, P.H))
+
+
+def render(out_dir, meta, opt):
+    """Рендер по сценам с кэшем кадров: сцена, чья отметка (engine/video/stamp.py) совпала со страницей, берётся из
+    <out>/frames/<сцена>/ (черновик — frames-draft/), остальные снимает HyperFrames кусками не длиннее chunk_sec.
+    Оборванный рендер продолжается с готовых сцен: отметка сцены пишется, когда сняты все её кадры.
+
+    opt: draft, png_only (без mp4 — кусок для assemble.py), max_frames (первые N кадров), force (мимо кэша),
+    scene | start, end (отрезок), workers (--workers или None), chunk_sec, tmp. Chrome — только под замком
+    (engine/chrome_lock.py): замок берётся до первого удаления прежних кадров и до временной папки, кодировщик
+    стартует после захвата — истёкшее ожидание замка ничего не меняет в выходной папке и ничего не оставляет.
+    → (кадры листа или None, секунд рендера, пик временных файлов, путь mp4 или None)."""
+    log('  ' + resources.report(out_dir))      # место и память называются до рендера, а не после падения
+    draft, png_only = bool(opt.get('draft')), bool(opt.get('png_only'))
+    mode = capture_mode(draft)
+    root = frame_stamp.DRAFT if draft else frame_stamp.FRAMES
+    fps, film_fps = mode['fps'], meta['fps']
+    plan = scene_plan(meta, fps)
+    full = plan[-1]['k0'] + plan[-1]['n']
+    ka, kb, span = render_span(opt, meta, plan, fps)
+    whole_film = (ka, kb) == (0, full)
+    budget = render_cfg()['frame_budget_ms']
+    workers, how = pick_workers(opt.get('workers'))
+    jobs = []
+    for s in plan:
+        a, b = max(ka, s['k0']), min(kb, s['k0'] + s['n'])
+        if a >= b:
+            continue
+        why, sides = (['--force: мимо кэша'], []) if opt.get('force') else \
+            frame_stamp.scene_stale(out_dir, s['id'], s['k0'] + 1, s['n'], mode, root)
+        jobs.append(dict(s, a=a, b=b, why=why, sides=sides, whole=(a == s['k0'] and b == s['k0'] + s['n'])))
+    logp = os.path.join(out_dir, 'render.log')
+    head = ('рендер по сценам: %s, %d к/с, кадр ролика %d × %d, захват %d × %d%s; кадры %d–%d из %d; воркеры захвата: %d (%s)'
+            % ('черновик' if draft else 'финал', fps, mode['size'][0], mode['size'][1], mode['grab'][0], mode['grab'][1],
+               ' (пресет HyperFrames %s)' % mode['preset'] if mode['preset'] else '', ka + 1, kb, full, workers, how))
+    log('  ' + head)
+    notes = []
+
+    def note(msg, plain=False):
+        notes.append(msg)
+        log(msg if plain else '  ' + msg)
+    t0, peak_bytes = time.time(), 0
+    if any(j['why'] or j['sides'] for j in jobs):
+        with chrome_lock.held('build.py render %s' % out_dir):
+            tmp = tmp_root(opt.get('tmp'))
+            log('  ' + resources.report(tmp))
+            work =os.path.join(tmp, '%s-%d' % (os.path.basename(out_dir), os.getpid()))
+            if os.path.exists(work):
+                shutil.rmtree(work)
+            hf_tmp = os.path.join(work, 'hf-temp')
+            os.makedirs(hf_tmp)
+            env = hf_env()
+            env['TEMP'] = env['TMP'] = env['TMPDIR'] = hf_tmp
+            peak = DiskPeak(work)
+            peak.start()
+            try:
+                with open(logp, 'w', encoding='utf-8') as fh:
+                    fh.write(head + '\nвременная папка %s\n' % work)
+                    rc = {'out_dir': out_dir, 'mode': mode, 'root': root, 'film_fps': film_fps, 'work': work, 'env': env,
+                          'fh': fh, 'logp': logp, 'workers': workers, 'note': note}
+                    for j in jobs:
+                        if j['why'] or not j['sides']:
+                            continue
+                        st = frame_stamp.scene_read(out_dir, j['id'], root) or {}
+                        moved = [side for side in j['sides'] if not seam_same(rc, j, side)]
+                        nb = ', '.join((frame_stamp.scene_print(out_dir, j['id'])[side] or {}).get('id') or 'край фильма'
+                                       for side in (moved or j['sides']))
+                        if moved:
+                            j['why'] = ['сосед %s изменился, и кадры у шва с ним стали другими (окно шва переснято)' % nb]
+                        else:
+                            frame_stamp.scene_write(out_dir, j['id'], j['k0'] + 1, j['n'], mode, root,
+                                                    **{k: st[k] for k in ('ms_per_frame', 'workers', 'capture') if k in st})
+                            j['seam_ok'] = nb
+                    groups = []
+                    for j in jobs:
+                        if not j['why']:
+                            note('сцена %s: %d кадров из кэша%s' % (j['id'], j['b'] - j['a'], (
+                                ' — сосед %s изменился, окно шва переснято: кадры те же' % j['seam_ok']) if j.get('seam_ok') else
+                                ' — отметка сцены совпала со страницей'))
+                        elif draft and groups and groups[-1][-1]['b'] == j['a']:
+                            groups[-1].append(j)       # черновик: соседние сцены одним захватом — запуск HyperFrames
+                        else:                          # стоит ≈ 15 с; финал — сцена отдельно: её мс/кадр свои
+                            groups.append([j])
+                    for g in groups:
+                        render_group(rc, g, opt.get('chunk_sec') or CHUNK_SEC, budget)
+                    fh.write('\n')
+            finally:
+                peak.stop()
+                peak_bytes = peak.peak
+                p = os.path.join(out_dir, CHUNK_PAGE)
+                if os.path.exists(p):
+                    os.remove(p)
+                shutil.rmtree(work, ignore_errors=True)
+    else:
+        for j in jobs:
+            note('сцена %s: %d кадров из кэша — отметка сцены совпала со страницей' % (j['id'], j['b'] - j['a']))
+        with open(logp, 'w', encoding='utf-8') as fh:
+            fh.write(head + '\n')
+    files = []
+    for j in jobs:
+        d = frame_stamp.scene_dir(out_dir, j['id'], root)
+        files += [os.path.join(d, 'frame_%06d.png' % (k + 1)) for k in range(j['a'], j['b'])]
+    lost = [f for f in files if not os.path.exists(f)]
+    if lost:
+        raise SystemExit('После рендера нет кадра %s (и ещё %d) — перерендерь с --force' % (lost[0], len(lost) - 1))
+    if whole_film or png_only:            # папка кадров = то, что годится нынешней странице; у финала — отметка куска
+        keep = {j['id'] for j in jobs}
+        keep |= {s['id'] for s in plan if s['id'] not in keep and s['n']
+                 and frame_stamp.scene_stale(out_dir, s['id'], s['k0'] + 1, s['n'], mode, root) == ([], [])}
+        prune_frames(out_dir, root, keep)
+        if not draft:
+            frame_stamp.write(out_dir, frame_stamp.frames_on_disk(out_dir), full, fps, (P.W, P.H))
+    picks = None
+    if whole_film:
+        picks = sheet_picks(meta)
+        sdir = os.path.join(out_dir, 'sheet')
+        if os.path.exists(sdir):
+            shutil.rmtree(sdir)
+        os.makedirs(sdir)
+        for idx, _, sname in picks:       # idx — номер кадра фильма с единицы; у черновика — ближайший его кадр
+            k = idx - 1 if fps == film_fps else int(round((idx - 1) * fps / film_fps))
+            shutil.copyfile(files[max(0, min(len(files) - 1, k))], os.path.join(sdir, sname))
+    dst = None
+    if not png_only:
+        name = 'video%s.mp4' % ('-draft' if draft else '') if span is None else \
+            os.path.join('clips', '%s%s.mp4' % (span, '-draft' if draft else ''))
+        dst = encode(out_dir, meta, mode, files, ka / fps, whole_film, os.path.join(out_dir, name), draft)
     rsec = time.time() - t0
-    log('  рендер%s: %d кадров · %.1f с · пик временных кадров на диске %.3f ГБ'
-        % ('' if png_only else ' и mp4', total, rsec, peak.peak / 1e9))
-    log('  mp4: %s' % dst if dst else '  кадры PNG: %s (%d шт., отметка %s)' % (kept, total, frame_stamp.NAME))
+    done = sum(j['b'] - j['a'] for j in jobs if j['why'])
+    tail = ('итог: %d кадров, из них снято %d, из кэша %d; %.1f с; пик временных файлов на диске %d байт'
+            % (len(files), done, len(files) - done, rsec, peak_bytes))
     with open(logp, 'a', encoding='utf-8') as fh:
-        fh.write('\nитог: %d кадров, %d кусков, %.1f с, пик временных файлов на диске %d байт\n' % (total, len(chunks), rsec, peak.peak))
-    return picks, rsec, peak.peak
+        fh.write('\n'.join(notes + [tail]) + '\n')
+    log('  рендер%s: %d кадров (снято %d, из кэша %d) · %.1f с · пик временных кадров на диске %.3f ГБ'
+        % ('' if png_only else ' и mp4', len(files), done, len(files) - done, rsec, peak_bytes / 1e9))
+    log('  mp4: %s' % dst if dst else '  кадры PNG: %s (%d шт., отметка %s)'
+        % (os.path.join(out_dir, root), len(files), frame_stamp.NAME))
+    return picks, rsec, peak_bytes, dst
 
 
 def contact_sheet(out_dir, picks, meta):
@@ -1727,13 +2339,18 @@ def main():
     ap.add_argument('--only', help='одна сцена фильма или несколько через запятую (sA,sB — шов)')
     ap.add_argument('--estimate', action='store_true', help='без звука: длительности по ms строк / смете')
     ap.add_argument('--page', action='store_true', help='только страница, film.json и промер DOM')
-    ap.add_argument('--draft', action='store_true', help='быстрее и грубее: CRF 23')
-    ap.add_argument('--keep-frames', action='store_true')
+    ap.add_argument('--draft', action='store_true',
+                    help='черновик: размер и частота кадров из project.json render.draft → video-draft.mp4')
+    ap.add_argument('--scene', help='рендер одной сцены фильма → <out>/<фильм>/clips/scene-<id>.mp4')
+    ap.add_argument('--start', type=float, help='рендер отрезка: с этой секунды фильма → clips/range-<с>-<по>.mp4')
+    ap.add_argument('--end', type=float, help='рендер отрезка: по эту секунду фильма (иначе до конца)')
+    ap.add_argument('--keep-frames', action='store_true',
+                    help='ничего не меняет: кадры сцен остаются в кэше всегда (ключ прежних версий)')
     ap.add_argument('--png', action='store_true',
-                    help='кусок для склейки: кадры <out>/<фильм>/frames/frame_%%06d.png и отметка, без mp4 (assemble.py)')
+                    help='кусок для склейки: кадры <out>/<фильм>/frames/<сцена>/frame_%%06d.png и отметка, без mp4 (assemble.py)')
     ap.add_argument('--frames', type=int, help='рендер только первых N кадров (пробный кусок; только с --png)')
-    ap.add_argument('--force', action='store_true', help='с --png: рендерить, даже если кадры свежие (отметка совпала)')
-    ap.add_argument('--workers', type=int, default=3)
+    ap.add_argument('--force', action='store_true', help='мимо кэша кадров: снять заново, даже если отметки совпали')
+    ap.add_argument('--workers', help='воркеры захвата: число или auto (иначе project.json render.workers)')
     ap.add_argument('--chunk-sec', type=float, default=CHUNK_SEC, help='длина куска рендера, с')
     ap.add_argument('--tmp', help='папка временных кадров (иначе VIDEO_TMP, иначе системный TEMP)')
     ap.add_argument('--style', help='один проход в этом стиле (имя папки styles/ или none) вместо проходов фильма')
@@ -1745,6 +2362,12 @@ def main():
         raise SystemExit('--frames N — только с --png: mp4 из части кадров был бы короче звука')
     if a.png and a.page:
         raise SystemExit('--png и --page вместе не идут: --page не рендерит, --png рендерит кадры')
+    if a.png and a.draft:
+        raise SystemExit('--png и --draft вместе не идут: кусок для склейки — кадры полного размера и частоты')
+    if a.scene and (a.start is not None or a.end is not None):
+        raise SystemExit('--scene и --start/--end вместе не идут: это два способа назвать отрезок')
+    if (a.scene or a.start is not None or a.end is not None) and (a.png or a.page):
+        raise SystemExit('--scene и --start/--end рендерят mp4 отрезка: с --png и --page не идут')
     P = config.Project(root)
     lipsync.FPS = P.fps
     lipsync.CACHE = os.path.join(str(P.out), 'cache', 'lipsync')
@@ -1761,6 +2384,10 @@ def main():
         bad = [x for x in want if x not in names]
         if bad or not want:
             raise SystemExit('Сцен %s нет в фильме %s (есть: %s)' % (', '.join(bad) or a.only, a.film, ', '.join(names)))
+        for added, by in needed_scenes(want, names, schema):
+            log('--only: добавлена сцена %s — её называет сцена %s (кадр входа соседа, окно в соседнюю сцену); '
+                'без неё страница не соберётся' % (added, by))
+            want.append(added)
         names = [n for n in names if n in want]
     sbs = []
     for n in names:
@@ -1777,6 +2404,7 @@ def main():
     scene_extras(sbs)
     out_dir = a.out_dir or os.path.join(str(P.out), a.film + ('--' + ','.join(names) if a.only else '')
                                         + ('--estimate' if a.estimate else ''))
+    out_dir = os.path.abspath(out_dir)      # рендер идёт с cwd = этой папке: относительный путь удвоился бы
     log('Фильм %s: %s (схема %s)' % (a.film, ' → '.join(names), schema_path))
     # проходы по стилям: films/<f>.json "styles": [...] — фильм собирается в каждом стиле в <out>/<f>/<стиль>/
     passes = film.get('styles') or [None]
@@ -1798,11 +2426,40 @@ def main():
             styles_sheet(out_dir, done)
 
 
+def needed_scenes(want, names, schema):
+    """Сцены фильма, без которых выбранные (--only) не соберутся: [(сцена, кто её назвал)], с замыканием по цепочке.
+    Сцена нуждается в другой, когда называет её id строкой в своей разметке (кавычки: CardKit.entry('kitchen')) или
+    в настройках плагинов раскадровки ("reveals": "kitchen") — там рисуется кадр входа соседа, и страница без него
+    падает в промере. Бит move к чужому элементу сюда не входит: без чужой сцены он пропускается (см. resolve)."""
+    def strings(o):
+        if isinstance(o, str):
+            yield o
+        elif isinstance(o, dict):
+            for v in o.values():
+                yield from strings(v)
+        elif isinstance(o, list):
+            for v in o:
+                yield from strings(v)
+    have, out, queue = set(want), [], list(want)
+    while queue:
+        n = queue.pop(0)
+        sb, markup = storyboard.load(n, SCENES_DIR, schema)
+        named = set(strings(sb.get('plugins') or {}))
+        for x in names:
+            if x in have:
+                continue
+            if x in named or re.search('([\'"])%s\\1' % re.escape(x), markup or ''):
+                have.add(x)
+                out.append((x, n))
+                queue.append(x)
+    return out
+
+
 def one_pass(a, film, sbs, out_dir, style):
     t0 = time.time()
     meta = build_page(a.film, film, copy.deepcopy(sbs), out_dir, a.estimate, style)
     probe(out_dir)
-    if meta.get('glitch_windows'):
+    if meta.get('glitch_windows') or meta.get('stills') or meta.get('lotties'):
         probe_frames(out_dir)
     else:
         p = os.path.join(out_dir, 'plugin_probe.json')
@@ -1827,11 +2484,15 @@ def one_pass(a, film, sbs, out_dir, style):
             log('  кадры свежие (%d шт., отметка совпала со страницей) — рендер пропущен; --force — рендерить заново'
                 % st['frames'])
             return None
-    picks, rsec, peak = render(out_dir, meta, a.workers, a.chunk_sec, tmp_root(a.tmp), 23 if a.draft else 18, a.keep_frames,
-                               png_only=a.png, max_frames=a.frames)
+    picks, rsec, peak, dst = render(out_dir, meta, {
+        'draft': a.draft, 'png_only': a.png, 'max_frames': a.frames, 'force': a.force, 'scene': a.scene,
+        'start': a.start, 'end': a.end, 'workers': a.workers, 'chunk_sec': a.chunk_sec, 'tmp': a.tmp})
     if a.png:
         log('Готово: кусок %s — %s кадров за %.1f с (%.2f с на секунду ролика)'
             % (a.film, a.frames or frame_count(meta['duration'], meta['fps']), time.time() - t0, rsec / meta['duration']))
+        return None
+    if picks is None:
+        log('Готово: отрезок %s за %.1f с (рендер и mp4 %.1f с)' % (dst, time.time() - t0, rsec))
         return None
     contact_sheet(out_dir, picks, meta)
     total = time.time() - t0
@@ -1841,12 +2502,13 @@ def one_pass(a, film, sbs, out_dir, style):
 
 
 def probe_frames(out_dir):
-    """Промер помех (probe_frames.mjs → plugin_probe.json): каждый кадр окон помех в 1/10 размера (вспышки, V27)
-    и кадры окна, снятые дважды в разном порядке после перезагрузки (детерминизм)."""
+    """Промер кадров (probe_frames.mjs → plugin_probe.json): помехи — каждый кадр окон в 1/10 размера (вспышки, V27)
+    и кадры окна, снятые дважды в разном порядке после перезагрузки (детерминизм); stills фильма — кадр 0, пары швов,
+    окна набора букв, кадры детерминизма (V41); запросы страницы мимо своих файлов (Lottie без сети, V39)."""
     t0 = time.time()
     with chrome_lock.held('build.py probe_frames %s' % out_dir):
         subprocess.run(['node', os.path.join(HERE, 'probe_frames.mjs'), out_dir], check=True)
-    log('  промер помех: %s · %.1f с' % (os.path.join(out_dir, 'plugin_probe.json'), time.time() - t0))
+    log('  промер кадров: %s · %.1f с' % (os.path.join(out_dir, 'plugin_probe.json'), time.time() - t0))
 
 
 def probe_style(out_dir):
@@ -1886,4 +2548,4 @@ def styles_sheet(out_dir, done):
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(deps.run(main))      # нехватка программы, упавший промер, истёкшее ожидание замка — строкой, не трассировкой

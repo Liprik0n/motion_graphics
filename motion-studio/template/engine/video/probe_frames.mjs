@@ -1,17 +1,28 @@
-// Промер помех (плагин glitch) собранной страницы — то, что проверка (V27) не узнает из DOM-промера.
+// Промер кадров собранной страницы — то, что проверки не узнают из DOM-промера: помехи (плагин glitch, V27),
+// кадры фильма (film.json stills, V40 и V41) и запросы страницы мимо своих файлов (Lottie без сети, V39).
 //   node engine/video/probe_frames.mjs <out/фильм>  →  <out/фильм>/plugin_probe.json, plugin_frames/*.png
 //
 // Окна помех — film.json glitch_windows [[сцена, from, to]]. Для каждого окна (± 0,5 с):
 //   flash — каждый кадр в 1/10 размера (CDP Page.captureScreenshot с clip.scale): яркость для WCAG 2.3.1;
 //   det   — три кадра окна (¼, ½, ¾) полного размера: первая загрузка по порядку (a), новая загрузка в обратном
 //           порядке с посторонним кадром перед каждым (b); проверка сравнивает a и b попиксельно.
+// Кадры фильма — film.json stills (ключ фильма "stills", build.py film_stills) → res.stills:
+//   frame0 — кадр 0; seams — пары кадров каждого шва (последний кадр сцены N и первый N+1); windows — кадр с
+//   раскрытыми окнами набора букв; det — кадры детерминизма (середины действий act, моменты Lottie): снят в первой
+//   загрузке (a) и после перезагрузки в обратном порядке с посторонним кадром перед каждым (b).
+// Запросы — res.requests: адреса всего, что страница просила мимо своих файлов (data: и blob: не в счёт).
 // Время ставится тем же путём, что рендер и probe_dom.mjs: seek таймлайна window.__timelines.main.
+//
+// Режим полосы кадров (engine/tools/strip.py):
+//   node engine/video/probe_frames.mjs <out/фильм> --strip <задание.json>
+//   задание {scale, frames: [{f, file}]} — кадры f страницы в масштабе scale (CDP clip.scale) в файлы file
+//   (пути абсолютные); plugin_probe.json и plugin_frames/ в этом режиме не трогаются. Печатает строку {"n": N}.
 // Запуск — только под замком Chrome (build.py берёт его сам: engine/chrome_lock.py).
-import { createServer } from 'node:http';
-import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync, rmSync } from 'node:fs';
-import { join, extname, resolve } from 'node:path';
-import { homedir } from 'node:os';
-import puppeteer from 'puppeteer-core';
+// Сервер страницы, Chrome (chromePath() из chrome_path.mjs), ожидание шрифтов и таймлайна, перемотка — общий модуль
+// probe_page.mjs.
+import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { serve, launch, openPage, seek as seekTime } from './probe_page.mjs';      // страница для промера — одно правило
 
 const outDir = resolve(process.argv[2] || '.');
 const film = JSON.parse(readFileSync(join(outDir, 'film.json'), 'utf8'));
@@ -20,58 +31,38 @@ const frameOf = (t) => Math.floor(t * fps + 0.5 + 5e-3);
 const lastFrame = Math.round(film.duration * fps) - 1;
 const MARGIN_SEC = 0.5, SCALE = 0.1;
 
-function chromePath() {
-  if (process.env.CHROME_PATH) return process.env.CHROME_PATH;
-  const base = join(homedir(), '.cache', 'hyperframes', 'chrome', 'chrome-headless-shell');
-  if (existsSync(base)) {
-    for (const v of readdirSync(base).sort().reverse()) {
-      for (const [dir, exe] of [['chrome-headless-shell-win64', 'chrome-headless-shell.exe'],
-        ['chrome-headless-shell-linux64', 'chrome-headless-shell'], ['chrome-headless-shell-mac-arm64', 'chrome-headless-shell'],
-        ['chrome-headless-shell-mac-x64', 'chrome-headless-shell']]) {
-        const p = join(base, v, dir, exe);
-        if (existsSync(p)) return p;
-      }
-    }
-  }
-  const sys = join(process.env.PROGRAMFILES || '', 'Google', 'Chrome', 'Application', 'chrome.exe');
-  if (existsSync(sys)) return sys;
-  throw new Error('Нет Chrome: npx hyperframes browser ensure (в engine/video) или задай CHROME_PATH');
-}
-
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.png': 'image/png',
-  '.svg': 'image/svg+xml', '.ttf': 'font/ttf', '.otf': 'font/otf', '.woff2': 'font/woff2', '.css': 'text/css' };
-const server = createServer((req, res) => {
-  const p = join(outDir, decodeURIComponent(req.url.split('?')[0]).replace(/^\/+/, '') || 'index.html');
-  if (!p.startsWith(outDir) || !existsSync(p)) { res.writeHead(404); res.end(); return; }
-  res.writeHead(200, { 'Content-Type': MIME[extname(p)] || 'application/octet-stream' });
-  res.end(readFileSync(p));
-});
-await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
-const url = `http://127.0.0.1:${server.address().port}/index.html`;
+const { server, origin, url } = await serve(outDir);
+const stripAt = process.argv.indexOf('--strip');
+const stripJob = stripAt > 0 ? JSON.parse(readFileSync(resolve(process.argv[stripAt + 1]), 'utf8')) : null;
 const dir = join(outDir, 'plugin_frames');
-rmSync(dir, { recursive: true, force: true });
-mkdirSync(dir);
-
-const browser = await puppeteer.launch({ executablePath: chromePath(), headless: true, protocolTimeout: 1800000,
-  args: ['--no-sandbox', '--disable-gpu', '--hide-scrollbars'] });
-const errors = [];
-const clip = { x: 0, y: 0, width: film.canvas.w, height: film.canvas.h };
-async function open() {
-  const page = await browser.newPage();
-  await page.setViewport({ width: film.canvas.w, height: film.canvas.h, deviceScaleFactor: 1 });
-  page.on('pageerror', (e) => errors.push(String(e)));
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-  await page.goto(url, { waitUntil: 'load' });
-  await page.evaluate(() => document.fonts.ready);
-  await page.waitForFunction(() => !!(window.__timelines && window.__timelines.main), { timeout: 10000, polling: 100 });
-  return page;
+if (!stripJob) {
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir);
 }
-const seek = (page, f) => page.evaluate((t) => { window.__timelines.main.totalTime(t, false); }, f / fps);
 
-const res = { film: film.film, fps, windows: [], det: [], errors };
+const browser = await launch();
+const errors = [];
+const requests = [];           // запросы страницы мимо своих файлов: при рендере по сети ничего не грузится (V39)
+const clip = { x: 0, y: 0, width: film.canvas.w, height: film.canvas.h };
+const open = () => openPage(browser, url, film.canvas, { errors, listen: (page) => page.on('request', (r) => {
+  const u = r.url();
+  if (!u.startsWith(origin) && !u.startsWith('data:') && !u.startsWith('blob:') && !requests.includes(u)) requests.push(u);
+}) });
+const seek = (page, f) => seekTime(page, f / fps);      // кадр f фильма
+
+const res = { film: film.film, fps, windows: [], det: [], errors, requests };
 try {
   let page = await open();
   const cdp = page.createCDPSession ? await page.createCDPSession() : await page.target().createCDPSession();
+  if (stripJob) {
+    for (const { f, file } of stripJob.frames) {
+      await seek(page, Math.min(Math.max(0, f), lastFrame));
+      const r = await cdp.send('Page.captureScreenshot', { format: 'png', clip: { ...clip, scale: stripJob.scale } });
+      writeFileSync(file, Buffer.from(r.data, 'base64'));
+    }
+    console.log(JSON.stringify({ n: stripJob.frames.length }));
+    await page.close();
+  } else {
   const detFrames = [];
   for (const [scene, from, to] of film.glitch_windows || []) {
     const f0 = Math.max(0, frameOf(from - MARGIN_SEC)), f1 = Math.min(lastFrame, frameOf(to + MARGIN_SEC));
@@ -100,8 +91,34 @@ try {
     res.det[k].b = 'plugin_frames/' + b;
   }
   await page.close();
+  const st = film.stills;
+  if (st) {                               // кадры фильма (V40, V41): кадр 0, пары швов, окна, детерминизм
+    res.stills = { frame0: null, seams: [], windows: [], det: [] };
+    page = await open();
+    const shot = async (f, name) => { await seek(page, f); await page.screenshot({ path: join(dir, name), clip }); return 'plugin_frames/' + name; };
+    res.stills.frame0 = await shot(st.frame0, 'still_f0.png');
+    for (let k = 0; k < st.seams.length; k++) {
+      const s = st.seams[k];
+      res.stills.seams.push({ from: s.from, to: s.to, fa: s.a, fb: s.b,
+        a: await shot(s.a, `still_seam${k}_a.png`), b: await shot(s.b, `still_seam${k}_b.png`) });
+    }
+    for (let k = 0; k < (st.windows || []).length; k++) {
+      const w = st.windows[k];
+      res.stills.windows.push({ scene: w.scene, cue: w.cue, f: w.f, t: w.f / fps, img: await shot(w.f, `still_win${k}.png`) });
+    }
+    for (let k = 0; k < st.det.length; k++)
+      res.stills.det.push({ f: st.det[k], t: st.det[k] / fps, a: await shot(st.det[k], `still_det${k}_a.png`) });
+    await page.close();
+    page = await open();                  // вторая загрузка: обратный порядок, посторонний кадр перед каждым
+    for (let k = st.det.length - 1; k >= 0; k--) {
+      await seek(page, Math.floor((st.det[k] + lastFrame / 2) % (lastFrame + 1)));
+      res.stills.det[k].b = await shot(st.det[k], `still_det${k}_b.png`);
+    }
+    await page.close();
+  }
+  }
 } finally {
-  writeFileSync(join(outDir, 'plugin_probe.json'), JSON.stringify(res, null, 0));
+  if (!stripJob) writeFileSync(join(outDir, 'plugin_probe.json'), JSON.stringify(res, null, 0));
   await browser.close();
   server.close();
 }

@@ -4,7 +4,8 @@
     python engine/tools/with_chrome_lock.py [--timeout СЕК] <команда> [аргументы]
 
 Код выхода — код команды. Замок — engine/chrome_lock.py (одна папка на машину во временной папке системы,
-другая — MOTION_CHROME_LOCK). Сборка (build.py), порчи проверок и общий прогон (check_all.py) берут тот же замок
+другая — MOTION_CHROME_LOCK). Ожидание ограничено: --timeout, иначе MOTION_CHROME_LOCK_TIMEOUT, иначе час; не
+дождалась — строка с меткой и pid владельца и код 2. Сборка (build.py), порчи проверок и общий прогон (check_all.py) берут тот же замок
 сами вокруг каждого запуска Chrome; вложенные вызовы под этой обёрткой не ждут сами себя. Свой скрипт, который
 запускает безголовый браузер (лист кадров, снимок страницы), зови только через эту обёртку.
 """
@@ -17,6 +18,7 @@ sys.stderr.reconfigure(encoding='utf-8')
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))      # <проект>/engine
 import chrome_lock  # noqa: E402
+import deps         # noqa: E402
 
 
 def main(argv):
@@ -34,4 +36,4 @@ def main(argv):
 
 
 if __name__ == '__main__':
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(deps.run(main, sys.argv[1:]))

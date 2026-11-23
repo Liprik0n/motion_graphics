@@ -29,6 +29,12 @@
     target_lufs / peak_dbtp / limiter_margin_db   итог: одна статическая поправка, ограничитель на 4×
                       с потолком peak_dbtp − margin (запас под AAC);
     margin_min_db, voice_tol_db, lufs_tol   пороги проверки `check_mix.py`.
+    tail_fade_sec     затухание финала косинусом к нулю за столько секунд до конца фильма (иначе — от конца
+                      последней реплики);
+    without_voice     true | [имена фильмов] — фильм без голоса допустим: ни одной реплики с mp3 → музыка без ducking на уровне
+                      track_lufs (+ gain_db трека), эффекты — в дБ относительно музыки (sfx.py), микс = музыка + эффекты.
+                      Фильм без глав (у сцен нет chapter) — одна часть «*».
+
 """
 import argparse
 import array
@@ -44,6 +50,9 @@ sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))      # <проект>/engine
+import deps     # noqa: E402
+deps.need('imageio_ffmpeg')     # нет пакета — строка «нет: … — поставь: …» и код 2, без трассировки
 import config   # noqa: E402
 import dsp      # noqa: E402
 import sfx      # noqa: E402
@@ -71,6 +80,9 @@ def chapter_timeline(film):
     """[(момент, глава)]: начальная глава и смены по событиям chapter (момент — середина хода полосы)."""
     sc = film['scenes'][0]
     cur = sc.get('chapter_from') or sc.get('chapter')
+    has_ch = any(e['kind'] == 'chapter' for e in film.get('events', []))
+    if cur is None and not has_ch:
+        cur = '*'       # фильм без глав: одна часть, трек «*»
     if cur is None:
         raise SystemExit('film.json: у первой сцены нет chapter_from/chapter — не знаю, какая глава на старте')
     out = [(0.0, cur)]
@@ -316,11 +328,29 @@ def prepare_tracks(audio, cfg, parts, span_len):
     return tracks
 
 
-def build(audio, tmp):
+def music_ref(bed, env):
+    """Фильм без голоса: (t0, t1) → RMS музыки после огибающей, дБ (bed — моно s16 на ASR без огибающей).
+    Постель прохода 1 сведена в моно фильтром aformat — это (L + R)/√2; опора — (L + R)/2, как моно
+    music.wav у проверки и `-ac 1`, поэтому −3,01 дБ (замер на треке: −13,79 против −16,80 дБ)."""
+    to_half = 20 * math.log10(math.sqrt(2))
+
+    def ref(t0, t1):
+        i0, i1 = max(0, int(t0 * ASR)), min(len(bed), int(t1 * ASR))
+        if i1 <= i0:
+            return -120.0
+        s = 0.0
+        for i in range(i0, i1):
+            g = env[min(len(env) - 1, i * ENV_RATE // ASR)]
+            s += (bed[i] * g) ** 2
+        return 10 * math.log10(s / (i1 - i0) / 32768.0 ** 2 + 1e-12) - to_half
+    return ref
+
+
+def build(audio, tmp, keep_clips=False):
     cfg = audio.music
     film = audio.film()
     dur = film['duration']
-    replies = audio.replies(film)
+    replies = audio.replies(film)       # пусто — фильм без голоса (music.json without_voice)
     parts = resolve_parts(film, cfg)
     xf, loop_xf = setting(cfg, 'xfade_sec'), setting(cfg, 'loop_xfade_sec')
     span_len = {p['index']: (dur if p['index'] == len(parts) - 1 else p['to'] + xf / 2) - (0.0 if p['index'] == 0 else p['from'] - xf / 2)
@@ -346,27 +376,32 @@ def build(audio, tmp):
                 return p['index']
         return parts[-1]['index']
 
-    # уровень реплики: музыка на duck_db ниже речи (речь — с поправкой голоса), база части — медиана
-    speech_db = dsp.speech_levels(audio, replies)
-    music_db = {r['num']: dsp.rms_db(bed, int(r['start'] * ASR), int(r['end'] * ASR)) for r in replies}
-    want = {n: speech_db[n] - setting(cfg, 'duck_db') - music_db[n] for n in speech_db}
-    base = {}
-    for p in parts:
-        v = sorted(want[r['num']] for r in replies if part_of(r['start']) == p['index'])
-        base[p['index']] = v[len(v) // 2] if v else DEFAULT_BASE_DB
-    duck = {r['num']: min(base[part_of(r['start'])], speech_db[r['num']] - setting(cfg, 'duck_min_db') - music_db[r['num']])
-            for r in replies}
-
-    # эффекты: план по событиям фильма, синтез, уровень по речи — до поправки микса
-    sfx_track, sfx_cues, sfx_dropped, _ = sfx.build_track(audio, film, replies, speech_db)
+    tail = cfg.get('tail_fade_sec')
+    if replies:
+        # уровень реплики: музыка на duck_db ниже речи (речь — с поправкой голоса), база части — медиана
+        speech_db = dsp.speech_levels(audio, replies)
+        music_db = {r['num']: dsp.rms_db(bed, int(r['start'] * ASR), int(r['end'] * ASR)) for r in replies}
+        want = {n: speech_db[n] - setting(cfg, 'duck_db') - music_db[n] for n in speech_db}
+        base = {}
+        for p in parts:
+            v = sorted(want[r['num']] for r in replies if part_of(r['start']) == p['index'])
+            base[p['index']] = v[len(v) // 2] if v else DEFAULT_BASE_DB
+        duck = {r['num']: min(base[part_of(r['start'])], speech_db[r['num']] - setting(cfg, 'duck_min_db') - music_db[r['num']])
+                for r in replies}
+        pts = envelope_points(replies, lambda t: base[part_of(t)], duck, setting(cfg, 'raise_db'),
+                              setting(cfg, 'raise_gap_sec'))
+        env = envelope_samples(pts, dur - float(tail) if tail else replies[-1]['end'] + TAIL_FADE_FROM_LAST, dur)
+        # эффекты: план по событиям фильма, синтез, уровень по речи — до поправки микса
+        sfx_track, sfx_cues, sfx_dropped, clips = sfx.build_track(audio, film, replies, speech_db)
+    else:
+        # без голоса: музыка ровно на track_lufs, затухание финала; эффекты — от музыки после огибающей
+        base = {p['index']: 0.0 for p in parts}
+        env = envelope_samples([(0.0, 0.0)], dur - float(tail) if tail else dur, dur)
+        sfx_track, sfx_cues, sfx_dropped, clips = sfx.build_track(audio, film, [], {}, ref_db=music_ref(bed, env))
     sfx_raw = os.path.join(tmp, 'sfx.raw')
     with open(sfx_raw, 'wb') as fh:
         fh.write(sfx_track.tobytes())
     del sfx_track
-
-    pts = envelope_points(replies, lambda t: base[part_of(t)], duck, setting(cfg, 'raise_db'),
-                          setting(cfg, 'raise_gap_sec'))
-    env = envelope_samples(pts, replies[-1]['end'] + TAIL_FADE_FROM_LAST, dur)
     env_raw = os.path.join(tmp, 'env.raw')
     with open(env_raw, 'wb') as fh:
         fh.write(env.tobytes())
@@ -376,7 +411,7 @@ def build(audio, tmp):
     def graph(gain_db, final=False):
         ins_b, ch_b = bed_graph(segs, tracks, SR, stereo=True)
         n_b = len(segs)
-        ins_s, ch_s = dsp.speech_graph(audio, replies, n_b + 1)
+        ins_s, ch_s = dsp.speech_graph(audio, replies, n_b + 1) if replies else ([], [])
         n_fx = n_b + 1 + len(replies)
         ins = (ins_b + ['-f', 'f32le', '-ar', str(ENV_RATE), '-ac', '1', '-i', env_raw] + ins_s
                + ['-f', 'f32le', '-ar', str(SR), '-ac', '1', '-i', sfx_raw])
@@ -385,10 +420,11 @@ def build(audio, tmp):
             '[fx1]pan=stereo|c0=c0|c1=c0[fx2]',
             '[%d:a]aresample=%d,pan=stereo|c0=c0|c1=c0[env]' % (n_b, SR),
             '[bed][env]amultiply,atrim=end_sample=%d,volume=%.4fdB,asplit=2[mus][mus2]' % (n_end, gain_db),
-            '[sp]volume=%.4fdB[sp2]' % gain_db,
-            '[sp2][mus2][fx2]amix=inputs=3:normalize=0:dropout_transition=0,atrim=end_sample=%d,'
+        ] + (['[sp]volume=%.4fdB[sp2]' % gain_db] if replies else []) + [
+            '%s[mus2][fx2]amix=inputs=%d:normalize=0:dropout_transition=0,atrim=end_sample=%d,'
             'aresample=%d,alimiter=limit=%.6f:attack=2:release=60:level=false:latency=true,'
-            'aresample=%d[mix]' % (n_end, SR * 4, 10 ** (ceil_db / 20), SR),
+            'aresample=%d[mix]' % ('[sp2]' if replies else '', 3 if replies else 2, n_end, SR * 4,
+                                   10 ** (ceil_db / 20), SR),
         ]
         if not final:
             ch.append('[mus]anullsink')
@@ -432,7 +468,7 @@ def build(audio, tmp):
 
     i_mix, tp_mix = dsp.lufs(['-i', str(audio.mix_m4a)])
     cues = {
-        'film': audio.film_name, 'film_duration': dur,
+        'film': audio.film_name, 'film_duration': dur, 'voice': bool(replies),
         'parts': [{'part': p['index'], 'chapters': p['chapters'], 'track': cfg['tracks'][p['track']]['file'],
                    'license': cfg['tracks'][p['track']]['license'], 'from': round(p['from'], 4), 'to': round(p['to'], 4)}
                   for p in parts],
@@ -458,6 +494,8 @@ def build(audio, tmp):
     for c in cues['parts']:
         if str(c['license']).upper().startswith('ЗАГЛУШКА'):
             print('  ВНИМАНИЕ: трек %s — заглушка; заменить треком с лицензией (music.json tracks[].license)' % c['track'])
+    if keep_clips:
+        return cues, clips
 
 
 def mux(audio):

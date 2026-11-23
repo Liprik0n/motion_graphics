@@ -47,6 +47,13 @@ def write_json(path, data):
     os.replace(tmp, path)
 
 
+def without_voice(music_cfg, film_name):
+    """music.json without_voice: true — любой фильм проекта может быть без голоса; список имён фильмов —
+    только эти (проект с озвученным фильмом рядом: ни одной реплики с mp3 у озвученного остаётся ошибкой)."""
+    v = music_cfg.get('without_voice')
+    return v is True or (isinstance(v, list) and film_name in v)
+
+
 class Audio:
     """Конфиги и пути звука одного фильма проекта."""
 
@@ -89,9 +96,14 @@ class Audio:
                 raise SystemExit('нет mp3 реплики %s: %s' % (r.get('num', r.get('n')), p))
             out.append({'num': r.get('num', r.get('n')), 'voice': r['voice'], 'start': r['start'],
                         'end': r['end'], 'path': str(p)})
-        if not out:
-            raise SystemExit('в film.json нет ни одной реплики с mp3 — микс не из чего собирать')
+        if not out and not self.without_voice():
+            raise SystemExit('в film.json нет ни одной реплики с mp3 — микс не из чего собирать '
+                             '(фильм без голоса — music.json "without_voice": true или [имена фильмов], опора уровней — музыка)')
         return out
+
+    def without_voice(self):
+        """Фильм без голоса допустим: music.json without_voice. Опора громкости эффектов — музыка."""
+        return without_voice(self.music, self.film_name)
 
     def voice_gain_db(self, voice):
         return voice_gain.gain_db(voice, self.dir)

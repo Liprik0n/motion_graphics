@@ -1,0 +1,32 @@
+<!-- Фикстура букв: заголовок, два хозяина фраз «пером» (плагин pen рисует в них свой холст сам) и холст набора букв
+     (CardKit.layer: банка-источник и фраза из её крупинок). Цвета — только роли палитры, тексты фраз — в раскадровке. -->
+<div class="el" id="world" style="left:0px; top:0px; width:1920px; height:1080px;">
+  <canvas width="1920" height="1080" style="position:absolute; left:0; top:0; width:1920px; height:1080px;"></canvas>
+</div>
+<div class="el" id="head" style="left:360px; top:80px; width:1200px; height:110px;">
+  <span class="t" style="display:block; width:1200px; line-height:110px; text-align:center; font-size:72px; font-weight:700; color:var(--c-primary); white-space:nowrap;">Буквы пером</span>
+</div>
+<div class="el" id="stem" style="left:260px; top:240px; width:1400px; height:330px;"></div>
+<div class="el" id="wire" style="left:260px; top:600px; width:1400px; height:200px;"></div>
+<script>
+/* Набор букв (films/pen.json libs: card-kit): мир сцены — банка-источник; уровень крупинок в банке падает по расходу
+   фразы (L.source). Фразу, её частицы и исполнителей меток ведёт CardKit.layer по меткам live и gather раскадровки. */
+(function () {
+  var CK = window.CardKit;
+  var cv = document.getElementById('pen-probe--world').querySelector('canvas');
+  var L = CK.layer({ scene: 'pen-probe', canvas: cv, materials: { dust: { kind: 'dust' } },
+    world: function (ctx, t, L) {
+      var b = L.box('jar'), left = L.source('jar', t).left, r = b.w * 0.18;
+      ctx.save(); L.camera(ctx, t);
+      ctx.fillStyle = CK.color('accent_pale'); ctx.strokeStyle = CK.color('primary'); ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.roundRect(b.x, b.y, b.w, b.h, r); ctx.fill();
+      ctx.save(); ctx.beginPath(); ctx.roundRect(b.x, b.y, b.w, b.h, r); ctx.clip();
+      ctx.fillStyle = CK.color('primary_pale'); ctx.fillRect(b.x, b.y + b.h * (1 - 0.8 * left), b.w, b.h);
+      ctx.restore();
+      ctx.beginPath(); ctx.roundRect(b.x, b.y, b.w, b.h, r); ctx.stroke();
+      ctx.restore();
+    } });
+  CK.entry('pen-probe', L.drawUpper);
+  L.exec();
+})();
+</script>

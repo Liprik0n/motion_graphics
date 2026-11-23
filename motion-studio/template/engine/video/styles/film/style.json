@@ -8,9 +8,9 @@
   "reel": "#2B2620", "leak": "#F0A050", "slate": "#26221C", "slate_light": "#EDE6D6"
  },
  "fonts": {
-  "title": {"family": "Georgia", "files": ["georgiab.ttf", "palab.ttf", "timesbd.ttf"], "weight": 700,
-            "note": "антиква, системный Windows (кириллица проверяется сборкой); нет файла — заголовок фирменным"},
-  "decor": {"family": "Courier New", "files": ["courbd.ttf", "consolab.ttf"], "weight": 700}
+  "title": {"family": "PT Serif", "files": ["PT_Serif-Web-Bold.ttf"], "weight": 700,
+             "note": "антиква, файл движка под OFL (assets/fonts/README.md); свой шрифт — файлом в <проект>/assets/fonts, первым в files"},
+  "decor": {"family": "IBM Plex Mono", "files": ["IBMPlexMono-Bold.ttf"], "weight": 700}
  },
  "objects": ["countdown", "reel", "slate", "strip", "beam", "sprockets", "edge-print", "grain"],
  "params": {

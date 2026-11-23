@@ -1,0 +1,4 @@
+# Пакеты Python для скила motion-studio. Ставит их `python tools/setup.py install` (или pip install -r requirements.txt).
+Pillow>=10
+imageio-ffmpeg>=0.5
+fonttools>=4.40

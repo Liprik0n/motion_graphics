@@ -1,0 +1,32 @@
+{
+ "scene": "pen-probe",
+ "title": "Буквы пером",
+ "frame": false,
+ "markup": "markup.html",
+ "notes": "Фикстура букв (films/pen.json): две фразы пишет перо — плагин pen, метки act do «write». write-stem (движение pen_stem, две строки): ведущая линия растёт из точки from, перо идёт по строке, контур открывается под пером, заливка идёт следом; write-wire (pen_wire, одна строка): за пером идёт свет. Третья фраза собирается из крупинок банки — набор букв engine/video/libs/card-kit.js (ключ фильма libs), метки live и gather. Время — немые строки фильма по 2 с: якорь {reply, at} — такт, не секунда. Проверки: V38 (строка не видна до пера, ведущая линия растёт и гаснет не за кадр), V40 и V43 (набор букв), V41 (кадры детерминизма).",
+ "start_state": {},
+ "end_state": {},
+ "plugins": {
+  "act": {
+   "cues": [
+    {"id": "live", "t": {"reply": 1, "at": 0}, "who": "world", "do": "live",
+     "objects": [{"id": "jar", "box": [0.07, 0.8, 0.07, 0.13]}]},
+    {"id": "write-stem", "t": {"reply": 1, "at": 0.5}, "until": {"reply": 3, "at": 0}, "who": "stem", "do": "write",
+     "motion": "pen_stem", "font": "brand", "ink": "ink", "lead": "accent", "from": [40, 300],
+     "lines": [{"text": "Линию ведёт перо", "x": 120, "y": 130, "size": 110, "align": "left"},
+               {"text": "заливка идёт следом", "x": 120, "y": 270, "size": 110, "align": "left"}]},
+    {"id": "write-wire", "t": {"reply": 3, "at": 0.5}, "until": {"reply": 5, "at": 0}, "who": "wire", "do": "write",
+     "motion": "pen_wire", "font": "brand", "ink": "ink", "glow": "highlight", "lead": "primary", "from": [1360, 20],
+     "lines": [{"text": "свет приходит за проводом", "x": 700, "y": 130, "size": 100, "align": "center"}]},
+    {"id": "gather", "t": {"reply": 5, "at": 0.25}, "until": {"reply": 6, "at": 0.5}, "who": "phrase", "do": "gather",
+     "motion": "card_gather", "material": "dust", "order": "ltr", "spend": "all",
+     "lines": [{"text": "буквы из крупинок", "role": "brand", "size_frac_w": 0.045, "x": 0.56, "y": 0.9, "align": "center",
+                "ink": ["primary", "accent"], "source": "jar"}]}
+   ]
+  }
+ },
+ "beats": [
+  {"reply": 1, "at": 0, "offset": -0.3, "action": "show", "targets": ["head"], "anim": "rise"},
+  {"reply": 1, "at": 0, "offset": -0.3, "action": "show", "targets": ["world", "stem", "wire"], "anim": "fade"}
+ ]
+}

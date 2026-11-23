@@ -18,14 +18,8 @@
   "dusk": "#3F6FD8"
  },
  "fonts": {
-  "title": {
-   "family": "Arial Black",
-   "files": [
-    "ariblk.ttf"
-   ],
-   "weight": 900,
-   "note": "тяжёлый гротеск, системный Windows (кириллица проверяется сборкой); свой шрифт заголовка — файлом в <проект>/assets/fonts, первым в files; нет файла — заголовок фирменным"
-  }
+  "title": {"family": "Golos Text", "files": ["GolosText-wght.ttf"], "weight": 900,
+             "note": "тяжёлый гротеск, файл движка под OFL (assets/fonts/README.md); свой шрифт — файлом в <проект>/assets/fonts, первым в files"}
  },
  "objects": [
   "foam",

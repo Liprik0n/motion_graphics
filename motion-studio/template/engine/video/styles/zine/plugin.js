@@ -5,7 +5,7 @@
    правого края и тетрадный клочок у левого; в зонах сцены — наклеенные вырезки с рваным краем, тенью и
    полоской скотча: «ШУМ» на розовом растре, молния, тетрадный клочок, марка со штемпелем, звезда-взрыв,
    фото с растром. Заголовок — буквами из разных журналов (StyleCore.codeTitle): у каждой буквы своя
-   плашка, свой системный шрифт, поворот и сдвиг от сида.
+   плашка, свой шрифт (роль из params.cut_fonts — файлы движка, style.json fonts), поворот и сдвиг от сида.
    Движение: стоп-моушен «на тройках» (step_frames) — вырезка шлёпается с перелётом и подрагивает.
    При style_brand_lock (cfg.world = false): бумажная фактура поверх фирменного фона и скотч роли бренда.
 
@@ -86,7 +86,7 @@
       noise: function (g, x, y, s, rnd) {
         var w = s * 0.8, x0 = x + s * 0.1, y0 = y + s * 0.12, d = torn(x0, y0, w, w * 0.9, rnd, 2.5, 14);
         S(g, 'path', { d: d, fill: D.pink }); S(g, 'path', { d: d, fill: dots });
-        txt(g, x0 + w / 2, y0 + w * 0.6, 'ШУМ', Math.round(s * 0.2), D.white, 'Impact', { 'text-anchor': 'middle', 'letter-spacing': '2' });
+        txt(g, x0 + w / 2, y0 + w * 0.6, 'ШУМ', Math.round(s * 0.2), D.white, cfg.fonts.cut_poster, { 'text-anchor': 'middle', 'letter-spacing': '2' });
         return [x0 + w / 2, y0];
       },
       bolt: function (g, x, y, s, rnd) {
@@ -127,7 +127,7 @@
         var cx = x + s / 2, cy = y + s / 2, pts = [];
         for (var k = 0; k < 24; k++) { var a = k / 24 * Math.PI * 2, r = (k % 2 ? 0.27 : 0.46) * s * (0.92 + rnd() * 0.16); pts.push((cx + Math.cos(a) * r).toFixed(1) + ' ' + (cy + Math.sin(a) * r).toFixed(1)); }
         S(g, 'path', { d: 'M' + pts.join(' L') + 'Z', fill: D.red });
-        txt(g, cx, cy + s * 0.11, 'СТОП', Math.round(s * 0.13), D.white, 'Impact', { 'text-anchor': 'middle' });
+        txt(g, cx, cy + s * 0.11, 'СТОП', Math.round(s * 0.13), D.white, cfg.fonts.cut_poster, { 'text-anchor': 'middle' });
         return [cx, cy - s * 0.3];
       },
       photo: function (g, x, y, s) {
@@ -164,7 +164,7 @@
         if (ch === ' ') { x += P.cut_space_px; continue; }
         var fam = P.cut_fonts[Math.floor(rnd() * P.cut_fonts.length)], col = CUT[Math.floor(rnd() * CUT.length)];
         var size = fsz * (0.88 + rnd() * 0.18);
-        meas.font = '700 ' + size + 'px "' + fam + '"';
+        meas.font = '700 ' + size + 'px ' + C.fontOf(NAME, fam);      // ширина буквы — по шрифту-файлу роли
         var tw = meas.measureText(ch).width, w = tw + 2 * P.cut_pad_px;
         letters.push({ ch: ch, fam: fam, col: col, size: size, x: x, w: w, rot: (rnd() - 0.5) * 2 * P.cut_rot_deg, dy: (rnd() - 0.5) * 2 * P.cut_dy_px, r: rnd() });
         x += w - 2;
@@ -174,7 +174,7 @@
       letters.forEach(function (L) {
         var lg = S(inner, 'g', { transform: 'translate(' + (L.x + L.w / 2).toFixed(1) + ',' + L.dy.toFixed(1) + ') rotate(' + L.rot.toFixed(1) + ')' });
         S(lg, 'path', { d: torn(-L.w / 2, -th / 2, L.w, th, C.rng(Math.floor(L.r * 1e6)), 1.2, 9), fill: L.col[0] });
-        txt(lg, 0, th * 0.3, L.ch, L.size.toFixed(1), L.col[1], L.fam, { 'text-anchor': 'middle' });
+        txt(lg, 0, th * 0.3, L.ch, L.size.toFixed(1), L.col[1], cfg.fonts[L.fam], { 'text-anchor': 'middle' });
       });
       // рамка надписи (с ячейками глифов) обязана лечь в рамку заголовка: вписать масштабом и отцентровать
       var bb = inner.getBBox(), k2 = Math.min(scale, (box.h - 6) / bb.height * scale, (box.w - 8) / bb.width * scale);

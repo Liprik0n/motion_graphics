@@ -129,6 +129,54 @@ def test_length_order_and_format():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def _film_by_scenes(proj, name, scenes):
+    """Кусок-фильм с кэшем кадров по сценам: frames/<сцена>/frame_%06d.png, номера сквозные по фильму (interfaces
+    сборки, «Рендер»); scenes — [(id, кадров, цвет)]."""
+    from PIL import Image
+    d = _film(proj, name, 0, (0, 0, 0), stamped=False)
+    k, total = 0, sum(n for _, n, _ in scenes)
+    for sid, n, rgb in scenes:
+        os.makedirs(os.path.join(d, 'frames', sid))
+        for _ in range(n):
+            k += 1
+            Image.new('RGB', (W, H), rgb).save(os.path.join(d, 'frames', sid, 'frame_%06d.png' % k))
+    with open(os.path.join(d, 'film.json'), 'w', encoding='utf-8') as fh:
+        json.dump({'film': name, 'fps': FPS, 'duration': total / FPS}, fh)
+    stamp.write(d, total, total, FPS, (W, H))
+    return d
+
+
+def test_piece_laid_out_by_scenes_keeps_order_and_length():
+    tmp = _tmp()
+    try:
+        proj = _project(tmp, {'pieces': [{'film': 'split'}]})
+        # папки сцен по алфавиту идут не в порядке фильма: порядок кадров задают номера, а не имена папок
+        _film_by_scenes(proj, 'split', [('z-first', 6, (200, 30, 30)), ('m-second', 9, (30, 200, 30)), ('a-third', 3, (30, 30, 200))])
+        code, out = _run(proj, 'clip', '--silent', '--draft')
+        check(code == 0, 'склейка куска с кадрами по сценам упала: %s' % out[-500:])
+        dst = os.path.join(proj, 'out', 'final', 'clip.mp4')
+        fr, _ = _probe(dst)
+        check(fr is not None and abs(fr - 18) <= 1, 'кадров %s, а сцены 6 + 9 + 3 = 18' % fr)
+        a, b, c = _frame_rgb(dst, 2.5 / FPS), _frame_rgb(dst, 10.5 / FPS), _frame_rgb(dst, 16.5 / FPS)
+        check(a[0] > a[1] + 60 and a[0] > a[2] + 60, 'кадр 3 — первая сцена (красная), а он %s' % [round(x) for x in a])
+        check(b[1] > b[0] + 60 and b[1] > b[2] + 60, 'кадр 11 — вторая сцена (зелёная), а он %s' % [round(x) for x in b])
+        check(c[2] > c[0] + 60 and c[2] > c[1] + 60, 'кадр 17 — третья сцена (синяя), а он %s' % [round(x) for x in c])
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_piece_with_a_hole_in_frame_numbers_refuses():
+    tmp = _tmp()
+    try:
+        proj = _project(tmp, {'pieces': [{'film': 'split', 'partial': True}]})
+        d = _film_by_scenes(proj, 'split', [('one', 6, (200, 30, 30)), ('two', 6, (30, 200, 30))])
+        os.remove(os.path.join(d, 'frames', 'two', 'frame_000009.png'))
+        stamp.write(d, 11, 12, FPS, (W, H))            # отметка согласна с диском: отказать должен счёт номеров
+        _refuses(proj, 'не подряд')
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def _refuses(proj, word, *args):
     code, out = _run(proj, 'clip', '--check', *(args or ('--silent',)))
     check(code != 0, 'сухой прогон прошёл, а должен отказать (%s): %s' % (word, out[-300:]))

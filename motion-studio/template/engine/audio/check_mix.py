@@ -11,8 +11,8 @@ video.mp4, video-music.mp4) и конфиги проекта (music.json, sfx.js
 (двухтрековый фикстур) `--red` запускает `music.py` подпроцессом на копии проекта во временной папке.
 `--final` — перед показом пользователю: трек-заглушка (license начинается с «ЗАГЛУШКА») краснеет.
 
-Условия без тематических констант (план треков и каталог событий берутся из music.json / sfx.json
-и film.json):
+Условия — карта к прошлому ролику: M<N> = C<N>, без тематических
+констант (план треков и каталог событий берутся из music.json / sfx.json и film.json):
 
   M1  длины music.wav, mix.m4a, sfx.wav и звука video-music.mp4 = фильм ± 1 кадр
   M2  части и треки по плану (главы фильма × music.json); у каждого трека указана лицензия
@@ -28,6 +28,11 @@ video.mp4, video-music.mp4) и конфиги проекта (music.json, sfx.js
   M12 начала эффектов не ближе min_gap_sec
   M13 выше hf_cut_hz эффект не громче музыки (или тише порога слышимости)
   M14 эффекты дошли до микса: в паузе волна микса = музыка + эффекты (МНК, вес 1,0 ± 0,3)
+
+Фильм без голоса (music.json without_voice, ни одной реплики с mp3): M5 и M9 не о чем мерить (строка «--»);
+M11 — эффект ≤ over_music_max_db к RMS music.wav в окне эффекта ± music_ref_pad_sec; M14 — по всем эффектам.
+События эффектов (M10) — film.json.events, film.json.acts (вид act) и метки sfx раскадровок (вид mark),
+прочитанные здесь своим кодом; M12 — только акценты (правило без texture: true).
 """
 import array
 import json
@@ -45,7 +50,11 @@ sys.dont_write_bytecode = True
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
 
-import imageio_ffmpeg
+sys.path.append(str(Path(__file__).resolve().parents[1]))      # <проект>/engine
+import deps     # noqa: E402
+deps.need('imageio_ffmpeg')     # нет пакета — строка «нет: … — поставь: …» и код 2, без трассировки
+import imageio_ffmpeg     # noqa: E402
+import config   # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 TEMPLATE = HERE.parents[1]
@@ -199,6 +208,8 @@ def expected_parts(film, mcfg):
     """Части музыки по главам фильма и music.json — свой вывод проверки: [(главы, файл, момент начала)]."""
     sc = film['scenes'][0]
     cur = sc.get('chapter_from') or sc.get('chapter')
+    if cur is None and not any(e['kind'] == 'chapter' for e in film.get('events', [])):
+        cur = '*'
     tl = [(0.0, cur)]
     for e in sorted((e for e in film.get('events', []) if e['kind'] == 'chapter'), key=lambda e: e['t']):
         if e['ref'] != cur:
@@ -224,18 +235,43 @@ def expected_parts(film, mcfg):
     return [(p[0], p[1], p[2]) for p in parts]
 
 
-def expected_events(film, scfg):
-    """Каталог sfx.json × события film.json: [(клип, момент удара, приоритет, подпись)]. Первое подходящее правило."""
+def world_events(root, pcfg, film):
+    """События мира сверх film.json.events: acts (вид act) и метки sfx раскадровок (вид mark, время — по строкам)."""
+    out = [{'kind': 'act', 't': a['t'], 'ref': a['id'], 'who': a.get('who'), 'do': a.get('do'), 'dur': a.get('span', 0.0)}
+           for a in film.get('acts', [])]
+    rows = {r.get('num', r.get('n')): r for r in film.get('replies', [])}
+    sdir = Path(root) / ((pcfg.get('paths') or {}).get('scenes') or 'scenes')
+    for sc in film.get('scenes', []):
+        f = sdir / sc['id'] / 'storyboard.json'
+        if not f.exists():
+            continue
+        for cue in ((read_json(f).get('plugins') or {}).get('act') or {}).get('cues', []):
+            for m in cue.get('sfx') or []:
+                a = m['t']
+                r = rows[a['reply']]
+                t = r['start'] + a.get('at', 0.0) * (r['end'] - r['start']) + a.get('offset', 0.0)
+                out.append({'kind': 'mark', 't': t, 'ref': '%s/%s' % (cue['id'], m['name']), 'name': m['name'],
+                            'role': m.get('role'), 'dur': 0.0})
+    return out
+
+
+def expected_events(film, scfg, extra=()):
+    """Каталог sfx.json × события film.json (+ extra — события мира): [(клип, момент удара, приоритет, подпись)].
+    Первое подходящее правило. Метка раскадровки без правила и без silent_marks — клип None (не озвучена)."""
     out = []
-    for e in film.get('events', []):
+    silent = scfg.get('silent_marks') or {}
+    for e in list(film.get('events', [])) + list(extra):
         for r in scfg['events']:
             if r['kind'] != e['kind']:
                 continue
             if any((e.get(k) not in v) if isinstance(v, list) else (e.get(k) != v) for k, v in (r.get('match') or {}).items()):
                 continue
             shift = {'start': 0.0, 'end': e.get('dur', 0.0), 'mid': e.get('dur', 0.0) / 2}[r.get('anchor', 'start')]
-            out.append((r['clip'], e['t'] + shift, r['prio'], '%s %s' % (e['kind'], e.get('ref'))))
+            out.append((r['clip'], e['t'] + shift + r.get('shift_sec', 0.0), r['prio'], '%s %s' % (e['kind'], e.get('ref'))))
             break
+        else:
+            if e['kind'] == 'mark' and e.get('name') not in silent:
+                out.append((None, e['t'], 0, 'метка %s без правила' % e['ref']))
     return out
 
 
@@ -429,6 +465,10 @@ def check(paths, log=print, final=False):
     # M5 музыка ниже речи в каждой реплике
     mu, mx = decode(paths['music'], RMS_RATE), decode(paths['mix'], RMS_RATE)
     voiced = [r for r in film['replies'] if r.get('file')]
+    if not voiced and not ok(config.without_voice(mcfg, film['film']), 'M5 фильм без голоса объявлен (music.json without_voice)'):
+        return fails
+    if not voiced:
+        log('  --  M5 голоса нет — музыке не под чем приглушаться; опора эффектов — музыка (M11)')
     worst, bad, margins = None, [], []
     for r in voiced:
         i0, i1 = int(r['start'] * RMS_RATE), int(r['end'] * RMS_RATE)
@@ -439,7 +479,7 @@ def check(paths, log=print, final=False):
         if margin < margin_min:
             bad.append('%d (%.1f дБ)' % (r['num'], margin))
     margins.sort()
-    ok(not bad, 'M5 музыка ниже речи ≥ %.0f дБ во всех репликах: худшая реплика %d — %.1f дБ, медиана %.1f дБ%s'
+    voiced and ok(not bad, 'M5 музыка ниже речи ≥ %.0f дБ во всех репликах: худшая реплика %d — %.1f дБ, медиана %.1f дБ%s'
        % (margin_min, worst[1], worst[0], margins[len(margins) // 2], ('; ниже порога: ' + ', '.join(bad[:8])) if bad else ''))
 
     # M6 клиппинг, M7 громкость
@@ -451,9 +491,11 @@ def check(paths, log=print, final=False):
     ok(abs(i_mix - lufs_target) <= lufs_tol, 'M7 громкость микса %.1f LUFS (%.0f ± %.0f)' % (i_mix, lufs_target, lufs_tol))
 
     # M9 голоса ровно — по миксу
-    vl = voice_loudness(paths['mix'], voiced)
+    vl = voice_loudness(paths['mix'], voiced) if voiced else {}
     have = {r['voice'] for r in voiced}
-    if ok(set(vl) == have, 'M9 в миксе промерены все голоса: %s' % ', '.join('%s %d' % (k, len(v)) for k, v in sorted(vl.items()))):
+    if not voiced:
+        log('  --  M9 голоса нет — сравнивать нечего')
+    elif ok(set(vl) == have, 'M9 в миксе промерены все голоса: %s' % ', '.join('%s %d' % (k, len(v)) for k, v in sorted(vl.items()))):
         med = {k: median(v) for k, v in vl.items()}
         if len(med) < 2:
             log('  --  M9 голос один — сравнивать не с чем')
@@ -466,7 +508,7 @@ def check(paths, log=print, final=False):
     if ok(os.path.exists(paths['sfx']), 'M1 есть sfx.wav'):
         d = len(decode(paths['sfx'], RMS_RATE)) / RMS_RATE
         ok(abs(d - dur) <= frame, 'M1 длина sfx.wav %.3f с, фильм %.3f с (± 1 кадр)' % (d, dur))
-        check_sfx(paths, film, scfg, cues, ok, mx, frame, log, voiced)
+        check_sfx(paths, film, scfg, cues, ok, mx, frame, log, voiced, mu, world_events(root, pcfg, film))
 
     # M8 video-music.mp4
     vm = paths['video_music']
@@ -487,7 +529,7 @@ def check(paths, log=print, final=False):
     return fails
 
 
-def check_sfx(paths, film, scfg, cues, ok, mx, frame, log, voiced):
+def check_sfx(paths, film, scfg, cues, ok, mx, frame, log, voiced, mu=None, extra=()):
     fx = cues.get('sfx', [])
     dropped = cues.get('sfx_dropped', [])
     min_gap = scfg.get('min_gap_sec', 1.5)
@@ -495,9 +537,12 @@ def check_sfx(paths, film, scfg, cues, ok, mx, frame, log, voiced):
     hf_cut = scfg.get('hf_cut_hz', 8000)
 
     # M10 привязка к фильму
-    ev = expected_events(film, scfg)
+    ev = expected_events(film, scfg, extra)
     bound, missing = set(), []
     for clip, hit, prio, title in ev:
+        if clip is None:
+            missing.append(title)
+            continue
         c = [c for c in fx if c['clip'] == clip and abs(c['hit'] - hit) <= frame]
         if c:
             bound.add(c[0]['id'])
@@ -536,6 +581,18 @@ def check_sfx(paths, film, scfg, cues, ok, mx, frame, log, voiced):
             s += en[i] - en[i - w]
             best = max(best, s)
         return None if best <= 0 else edb(best / w)
+    if not voiced:
+        over_max, pad = scfg.get('over_music_max_db', -3.0), scfg.get('music_ref_pad_sec', 1.0)
+        lv = []
+        for c in fx:
+            m = win_db(c['onset'], c['end'])
+            ref = rms_db(mu, int(max(0.0, c['onset'] - pad) * RMS_RATE), int(min(film['duration'], c['end'] + pad) * RMS_RATE))
+            if m is not None:
+                lv.append((m - ref, c['id'], c['clip']))
+        w = max(lv) if lv else (-200.0, '—', '')
+        bad = ['%s %s %+.1f' % (i, k, d) for d, i, k in lv if d > over_max]
+        ok(not bad, 'M11 эффекты ≤ %+.0f дБ к музыке рядом (окно ± %.1f с): эффектов %d, громче всех %s %s %+.1f дБ%s'
+           % (over_max, pad, len(lv), w[1], w[2], w[0], ('; громче: ' + ', '.join(bad[:6])) if bad else ''))
     sp = {r['num']: rms_db(mx, int(r['start'] * RMS_RATE), int(r['end'] * RMS_RATE)) for r in voiced}
     under, pause = [], []
     for i, r in enumerate(voiced):
@@ -548,24 +605,26 @@ def check_sfx(paths, film, scfg, cues, ok, mx, frame, log, voiced):
             if m is not None:
                 ref = (sp[r['num']] + sp[voiced[i - 1]['num']]) / 2 if i else sp[r['num']]
                 pause.append((m - ref, 'пауза %.1f–%.1f' % (a, r['start'])))
-    m = win_db(voiced[-1]['end'], film['duration'])
+    m = win_db(voiced[-1]['end'], film['duration']) if voiced else None
     if m is not None:
         pause.append((m - sp[voiced[-1]['num']], 'хвост фильма'))
     wu = max(under) if under else (-200.0, '—')
     wp = max(pause) if pause else (-200.0, '—')
     bad_u = ['%s %+.1f' % (w, d) for d, w in under if d > under_max]
     bad_p = ['%s %+.1f' % (w, d) for d, w in pause if d > pause_max]
-    ok(not bad_u, 'M11 эффекты под речью ≤ %+.0f дБ к реплике: реплик с эффектом %d, худшая %s %+.1f дБ%s'
+    voiced and ok(not bad_u, 'M11 эффекты под речью ≤ %+.0f дБ к реплике: реплик с эффектом %d, худшая %s %+.1f дБ%s'
        % (under_max, len(under), wu[1], wu[0], ('; громче: ' + ', '.join(bad_u[:6])) if bad_u else ''))
-    ok(not bad_p, 'M11 эффекты в паузах ≤ %+.0f дБ к соседней речи: пауз с эффектом %d, худшая %s %+.1f дБ%s'
+    voiced and ok(not bad_p, 'M11 эффекты в паузах ≤ %+.0f дБ к соседней речи: пауз с эффектом %d, худшая %s %+.1f дБ%s'
        % (pause_max, len(pause), wp[1], wp[0], ('; громче: ' + ', '.join(bad_p[:6])) if bad_p else ''))
 
     # M12 плотность
-    on = sorted((c['onset'], c['id']) for c in fx)
+    on = sorted((c['onset'], c['id']) for c in fx if not c.get('texture'))
     gaps = [(b[0] - a[0], a[1], b[1]) for a, b in zip(on, on[1:])]
     close = ['%s–%s %.2f с' % (a, b, g) for g, a, b in gaps if g < min_gap]
-    ok(not close, 'M12 плотность: начала эффектов не ближе %.1f с, наименьший промежуток %s%s'
-       % (min_gap, '%.2f с' % min(gaps)[0] if gaps else '—', ('; ближе: ' + ', '.join(close[:6])) if close else ''))
+    n_tex = sum(1 for c in fx if c.get('texture'))
+    ok(not close, 'M12 плотность: начала акцентов не ближе %.1f с, наименьший промежуток %s%s%s'
+       % (min_gap, '%.2f с' % min(gaps)[0] if gaps else '—', ' (фактура вне правила: %d)' % n_tex if n_tex else '',
+          ('; ближе: ' + ', '.join(close[:6])) if close else ''))
 
     # M13 спектр выше hf_cut
     hs_, hm = decode_hp(paths['sfx'], SFX_RATE, hf_cut), decode_hp(paths['music'], SFX_RATE, hf_cut)
@@ -587,7 +646,7 @@ def check_sfx(paths, film, scfg, cues, ok, mx, frame, log, voiced):
     sx, mm, xm = (decode(paths['sfx'], SFX_RATE), decode(paths['music'], SFX_RATE), decode(paths['mix'], SFX_RATE))
     ws = []
     for c in fx:
-        if c['level']['where'] != 'пауза':
+        if c['level']['where'] not in ('пауза', 'музыка'):
             continue
         i0, i1 = int((c['hit'] - 0.02) * SFX_RATE), int((c['hit'] + 0.30) * SFX_RATE)
         x, y, m = mm[i0:i1], sx[i0:i1], xm[i0:i1]
@@ -597,7 +656,7 @@ def check_sfx(paths, film, scfg, cues, ok, mx, frame, log, voiced):
         det = sxx * syy - sxy * sxy
         if det > 0 and syy > 0:
             ws.append((sym * sxx - sxm * sxy) / det)
-    if not ws and not any(c['level']['where'] == 'пауза' for c in fx):
+    if not ws and not any(c['level']['where'] in ('пауза', 'музыка') for c in fx):
         log('  --  M14 эффектов в паузах нет — вес эффектов в миксе не промерен')
         return
     wmed = median(ws) if ws else None
@@ -680,15 +739,26 @@ def red(pdir, film_name, only=(), mode='all'):
             return lambda: {'mix': m4a('voice-%s-%d.m4a' % (voice, round(db * 100)),
                                        "volume=enable='%s':volume=%.2fdB" % (en, db))}
 
-        by_clip = lambda clip, k=0: [c for c in fx0 if c['clip'] == clip][k]   # noqa: E731
-        seam = [c for c in fx0 if c['event']['kind'] == 'seam'][0]
-        ping1, ping2 = by_clip('ping'), by_clip('ping', 1)
-        under_c = [c for c in fx0 if c['event']['kind'] == 'chapter'][0]   # самый громкий эффект под репликой
-        spread0, hi_voice, lo_voice = voice_spread(paths0, voiced)
-        pause_c = seam                        # эффект в паузе между сценами
-        lone_t = 15.0                         # место без событий каталога рядом
-        rep = voiced[len(voiced) // 2]
-        gap_g = voice_gap(film, cues0) or 2.0
+        if voiced:
+            by_clip = lambda clip, k=0: [c for c in fx0 if c['clip'] == clip][k]   # noqa: E731
+            seam = [c for c in fx0 if c['event']['kind'] == 'seam'][0]
+            ping1, ping2 = by_clip('ping'), by_clip('ping', 1)
+            under_c = [c for c in fx0 if c['event']['kind'] == 'chapter'][0]   # самый громкий эффект под репликой
+            spread0, hi_voice, lo_voice = voice_spread(paths0, voiced)
+            pause_c = seam                        # эффект в паузе между сценами
+            lone_t = 15.0                         # место без событий каталога рядом
+            rep = voiced[len(voiced) // 2]
+            gap_g = voice_gap(film, cues0) or 2.0
+        else:
+            # фильм без голоса: роли «шва» и «пингов» играют акценты фильма (не фактура), место «лишнего» звука —
+            # первая точка, где ни один эффект не звучит ближе 1 с
+            acc = sorted((c for c in fx0 if not c.get('texture')), key=lambda c: c['onset']) or list(fx0)
+            seam, ping1, ping2 = acc[0], acc[min(1, len(acc) - 1)], acc[-1]
+            under_c = pause_c = seam
+            spread0, hi_voice, lo_voice, gap_g = 0.0, None, None, 0.0
+            rep = {'num': 0, 'start': 0.0, 'end': 0.0}
+            lone_t = next((k / 4 for k in range(4, int(dur * 4) - 8)
+                           if all(k / 4 < c['onset'] - 1.0 or k / 4 > c['end'] + 1.0 for c in fx0)), dur / 2)
 
         def sfx_fc(name, graph, extra=()):
             p = os.path.join(tmp, name)
@@ -799,8 +869,26 @@ def red(pdir, film_name, only=(), mode='all'):
              lambda: {'cues': cues_with(cue_copy(ping2, 1.6)), 'sfx': moved(ping2, 1.6, keep=True, name='ping16.wav')}, 'M12'),
         ]
         # двухтрековый фикстур: M3, M4 (в демо стыков нет)
+        if not voiced:
+            drop = ('M5', 'M9', 'M11 эффекты под речью', 'M11 эффекты в паузах')
+            cases = [c for c in cases if not any(c[2].startswith(d) for d in drop) and 'нет правила для главы' not in c[0]]
+            samples = [c for c in samples if c[2] != 'M9']
+            cases += [
+                ('без голоса: эффект громче музыки — %s %s +8 дБ' % (seam['id'], seam['clip']),
+                 lambda: {'sfx': louder(seam, 8, 'over8.wav')}, 'M11 эффекты ≤'),
+                ('без голоса: в music.json снят without_voice', lambda: {'music_cfg': edit_json(
+                    paths0['music_cfg'], lambda m: m.pop('without_voice', None), 'voiced.json')},
+                 'M5 фильм без голоса объявлен'),
+                ('в каталоге нет правила для вида %s, а эффект в метках остался' % seam['clip'], lambda: {
+                    'sfx_cfg': edit_json(paths0['sfx_cfg'], lambda s: s.update(
+                        events=[r for r in s['events'] if r['clip'] != seam['clip']]), 'norule.json')},
+                 'M10 эффекты без события'),
+            ]
         fixture = None
-        if (not only) or any(o in 'M3 M4 двухтрековый фикстур' for o in only):
+        has_ch = any(e['kind'] == 'chapter' for e in film.get('events', []))
+        if not has_ch:
+            print('  --  двухтрековый фикстур (M3, M4) пропущен: в фильме нет событий главы')
+        if has_ch and ((not only) or any(o in 'M3 M4 двухтрековый фикстур' for o in only)):
             fixture = two_track_fixture(paths0, film_name, tmp)
             fcues = read_json(fixture['cues'])
             fparts = fcues['parts']
@@ -877,10 +965,12 @@ def voice_spread(paths, voiced):
 
 
 def first_voice(voiced):
-    return voiced[0]['voice']
+    return voiced[0]['voice'] if voiced else None
 
 
 def second_voice(voiced):
+    if not voiced:
+        return None
     return next((r['voice'] for r in voiced if r['voice'] != voiced[0]['voice']), voiced[0]['voice'])
 
 

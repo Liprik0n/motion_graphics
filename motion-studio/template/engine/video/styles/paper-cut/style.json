@@ -26,15 +26,8 @@
   "blade": "#2F4A44"
  },
  "fonts": {
-  "title": {
-   "family": "Rubik",
-   "files": [
-    "Rubik-Bold.ttf",
-    "ariblk.ttf"
-   ],
-   "weight": 700,
-   "note": "округлый гротеск, системный файл (кириллица проверяется сборкой); нет файла — заголовок фирменным"
-  }
+  "title": {"family": "Rubik", "files": ["Rubik-wght.ttf"], "weight": 700,
+             "note": "округлый гротеск, файл движка под OFL (assets/fonts/README.md); свой шрифт — файлом в <проект>/assets/fonts, первым в files"}
  },
  "objects": [
   "pine",

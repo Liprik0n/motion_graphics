@@ -10,8 +10,8 @@
   "felt_pink": "#E7798A", "button": "#C9893F", "stitch": "#B23A30", "shade": "#2A2A2A"
  },
  "fonts": {
-  "title": {"family": "Segoe UI Black", "files": ["seguibl.ttf", "ariblk.ttf"], "weight": 900,
-            "note": "плотный гротеск нашивки, системный Windows (кириллица проверяется сборкой); нет файла — заголовок фирменным"}
+  "title": {"family": "Rubik", "files": ["Rubik-wght.ttf"], "weight": 900,
+             "note": "плотный округлый гротеск нашивки, файл движка под OFL (assets/fonts/README.md); свой шрифт — файлом в <проект>/assets/fonts, первым в files"}
  },
  "objects": ["sun", "cloud", "plane", "button", "tree", "heart", "spool", "title-patch", "knit", "seams"],
  "params": {

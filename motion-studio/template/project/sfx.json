@@ -1,5 +1,5 @@
 {
- "_comment": "Звуковые эффекты проекта. events[] — каталог «событие фильма → вид звука»: kind — вид события из film.json.events (show hide level emph move seam chapter title); match — сузить по полям события (emph + style); clip — вид из engine/audio/synth.py CLIPS (tick click ping bell chime thump whoosh whoosh_click); variants — число вариантов по кругу; gain_db — номинал, дБ относительно речи; prio — кто остаётся при конфликте плотности (младший выпадает, запись в cues.json sfx_dropped); anchor — где у события удар: start (t), end (t + dur), mid; lead_sec — разгон вжуха до щелчка. Событие без правила не звучит. Числа — замер прошлого ролика (process/07-sfx.md; класс дефектов 13): под речью ≤ -18 дБ, в паузе ≤ -10 дБ, ≥ 1,5 с между звуками; цели сборки с запасом 3 и 2 дБ на ограничитель и AAC. keep_prio: приоритеты не ниже — не выпадают, конфликт двух таких роняет сборку (режиссёр двигает событие).",
+ "_comment": "Звуковые эффекты проекта. events[] — каталог «событие фильма → вид звука»: kind — вид события из film.json.events (show hide level emph move seam chapter title); match — сузить по полям события (emph + style); clip — вид из engine/audio/synth.py CLIPS (tick click ping bell chime thump whoosh whoosh_click); variants — число вариантов по кругу; gain_db — номинал, дБ относительно речи; prio — кто остаётся при конфликте плотности (младший выпадает, запись в cues.json sfx_dropped); anchor — где у события удар: start (t), end (t + dur), mid; lead_sec — разгон вжуха до щелчка. Событие без правила не звучит. Фильм без голоса (music.json without_voice): gain_db — дБ относительно музыки рядом (окно ± music_ref_pad_sec), под потолком over_music_target_db при сборке и over_music_max_db при проверке; события — ещё и acts фильма (kind act: who, do) и метки раскадровки plugins.act.cues[].sfx[] (kind mark: name). Метка без правила и без имени в silent_marks {имя: причина} — ошибка сборки. shift_sec — удар позже события; texture: true — фактура вне плотности min_gap_sec (акценты не ближе). Правила act и mark здесь — для демо films/silent.json. Числа — прошлый ролик: под речью ≤ -18 дБ, в паузе ≤ -10 дБ, ≥ 1,5 с между звуками; цели сборки с запасом 3 и 2 дБ на ограничитель и AAC. keep_prio: приоритеты не ниже — не выпадают, конфликт двух таких роняет сборку (режиссёр двигает событие).",
  "min_gap_sec": 1.5,
  "keep_prio": 9,
  "under_speech_max_db": -18.0,
@@ -7,11 +7,18 @@
  "under_speech_target_db": -21.0,
  "pause_target_db": -12.0,
  "hf_cut_hz": 8000,
+ "over_music_target_db": -6.0,
+ "over_music_max_db": -3.0,
+ "music_ref_pad_sec": 1.0,
+ "silent_marks": {},
  "proba": {"pad_sec": 2.0, "max_sec": 40.0},
  "events": [
   {"kind": "seam", "clip": "whoosh_click", "variants": 3, "gain_db": -13.0, "prio": 9, "anchor": "start", "lead_sec": 0.45},
   {"kind": "chapter", "clip": "whoosh_click", "variants": 3, "gain_db": -14.0, "prio": 7, "anchor": "end", "lead_sec": 0.55},
   {"kind": "emph", "match": {"style": "ring"}, "clip": "ping", "variants": 3, "gain_db": -27.0, "prio": 1, "anchor": "start"},
-  {"kind": "show", "match": {"anim": "draw"}, "clip": "tick", "variants": 3, "gain_db": -24.0, "prio": 2, "anchor": "start"}
+  {"kind": "show", "match": {"anim": "draw"}, "clip": "tick", "variants": 3, "gain_db": -24.0, "prio": 2, "anchor": "start"},
+  {"kind": "act", "match": {"who": "dots", "do": "on"}, "clip": "bulb", "variants": 4, "gain_db": -17.0, "prio": 1, "anchor": "start", "texture": true},
+  {"kind": "mark", "match": {"name": "ding"}, "clip": "ding", "variants": 2, "gain_db": -12.0, "prio": 5, "anchor": "start"},
+  {"kind": "mark", "match": {"name": "swoosh"}, "clip": "swish", "gain_db": -12.0, "prio": 5, "anchor": "start"}
  ]
 }

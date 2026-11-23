@@ -18,17 +18,18 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import time
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))     # engine/video
 sys.path.insert(0, HERE)
 import check as C      # noqa: E402
 sys.path.insert(0, os.path.dirname(HERE))
 import chrome_lock     # noqa: E402  замок безголового Chrome
+from checks import red_film as R     # noqa: E402  порчи глаза (V36, V37), годные для любого фильма
+from checks import redrun            # noqa: E402  прогон порч — один на все файлы порч
 
 A, B = 'demo-a', 'demo-b'
 # слова тематики для порч сторожа — кодами, чтобы этот файл сам не был находкой
-W_NAME_F = '\u0417\u043b\u0430\u0442\u0430'                  # имя ведущей прошлого ролика (вымышленное, checks/theme_guard.json)
+W_NAME_F = '\u0417\u043b\u0430\u0442\u0430'                        # имя ведущей
 W_NAME_M = '\u0422\u0438\u0445\u043e\u043d\u043e\u043c'      # имя ведущего, творительный
 W_BRAND = '\u0420\u043e\u043c\u0430\u0448\u043a\u0430-\u0421\u0435\u0440\u0432\u0438\u0441'
 W_OBJ = '\u041a\u0421-12'
@@ -416,6 +417,8 @@ def voice0(ctx):
 
 def expect_of(ctx, expect):
     """Ожидаемая подстрока с подстановкой {voice0}, {voice1} — id голосов из конфига проекта."""
+    if callable(expect):
+        return expect(ctx)
     for i in (0, 1):
         tag = '{voice%d}' % i
         if tag in expect:
@@ -846,6 +849,35 @@ def s_flicker_dip(ctx, tmp):
     _it(s, B + '--card2')['opacity'] = 0.5
 
 
+# ---------------------------------------------------------------- V36 живость по зонам, V37 читаемость по пикселям
+# Порчи рисуют кодом поверх кадров демо (checks/red_film.py): картинок в шаблоне нет.
+# Порчи «слой заморожен» и образца «пауза still» у демо нет: при пороге шаблона density.max_static 6,0 с и кадрах через
+# 0,5 с V36 краснеет в сцене длиннее 12,5 с (ехать 6,0 с и простоять дольше 6,0 с), а сцены демо — 12,4 и 9,2 с. Порог
+# ради порчи не уменьшается; что V36 здесь слепа, говорит её строка отчёта («покраснеть не может: demo-a, demo-b»).
+# Порча с числом проекта и образец паузы идут на фильме pen (сцена pen-probe, 13,4 с) — checks/red_pen.py.
+GOLD_LINE = B + '--card1'          # надпись карточки demo-b: под ней — закат, вместо букв — золото
+
+
+def m_gold_dom(ctx, tmp):
+    """Золото на закате: светлые буквы на светлом тёплом фоне в рамке надписи DOM."""
+    R.m_gold_dom(ctx, tmp, GOLD_LINE)
+
+
+def m_gold_canvas(ctx, tmp):
+    """То же в области, которую сцена объявила для текста на canvas (window.__textRects)."""
+    R.m_gold_canvas(ctx, tmp)
+
+
+def s_layer_moving(ctx, tmp):
+    """Слой едет всю сцену — живой."""
+    R.s_layer_moving(ctx, tmp)
+
+
+def s_outline_canvas(ctx, tmp):
+    """Принятая обводка: светлая заливка, сразу тёмная обводка, на тёплом закатном фоне."""
+    R.s_outline_canvas(ctx, tmp)
+
+
 # (имя, порча, подстрока, которой обязана покраснеть проверка)
 RED_FAST = [
     ('страница короче звука', m_page_short, 'а последняя реплика кончается'),
@@ -932,6 +964,8 @@ RED_FAST = [
     ('третья рука: поднята, а опущенная видна', m_pose_third_arm, 'V25 поза: demo-b — у «geroj» видны и поднятая, и опущенная конечность стороны right'),
     ('жест не попал в промер', m_pose_never_up, 'V25 поза: demo-b — у «geroj» объявлена поднятая конечность стороны right, а кадра с ней в промере нет'),
     ('разметка конечности без положения', m_pose_bad_tag, 'V25 поза: разметка data-limb="geroj:right:vverh"'),
+    ('золото на закате: надпись DOM', m_gold_dom, 'V37 читаемость: #demo-b--card1'),
+    ('золото на закате: текст на canvas', m_gold_canvas, 'V37 читаемость: canvas «%s»' % R.PHRASE_ID),
 ]
 
 SAMPLES = [
@@ -952,6 +986,8 @@ SAMPLES = [
     ('запрет снят проектом', s_guard_allow),
     ('уход под движением', s_vanish_moving),
     ('провал до 0,5 — не мигание', s_flicker_dip),
+    ('слой едет без остановки', s_layer_moving),
+    ('обводка на закате: светлая заливка, тёмная обводка', s_outline_canvas),
 ]
 
 
@@ -1067,6 +1103,56 @@ def pp_font_broken(od):
             fh.write(b'not a font')
 
 
+DUSK = '''
+  <canvas data-dusk width="744" height="64" style="position:absolute; left:936px; top:-8px;"></canvas>
+'''
+DUSK_JS = '''
+<script>
+/* образец сцены с текстом на canvas: рисует фразу и объявляет её область для проверки читаемости (V37) */
+(function () {
+  var cv = document.querySelector('canvas[data-dusk]'), g = cv.getContext('2d'), TEXT = 'Тёплый вечер', PEN = %(pen)d;
+  function role(n) { return getComputedStyle(document.getElementById('root')).getPropertyValue('--c-' + n).trim(); }
+  g.fillStyle = role('paper'); g.fillRect(0, 0, cv.width, cv.height);
+  g.globalAlpha = 0.35; g.fillStyle = role('accent'); g.fillRect(0, 0, cv.width, cv.height); g.globalAlpha = 1;
+  g.font = 'bold 44px sans-serif'; g.textBaseline = 'alphabetic'; g.lineJoin = 'round';
+  if (PEN) { g.lineWidth = PEN; g.strokeStyle = role('ink'); g.strokeText(TEXT, 24, 48); }
+  g.fillStyle = role('%(fill)s'); g.fillText(TEXT, 24, 48);
+  var m = g.measureText(TEXT);
+  function seen(el) {
+    var o = 1;
+    for (var n = el; n && n.nodeType === 1; n = n.parentElement) {
+      var cs = getComputedStyle(n);
+      if (cs.display === 'none' || cs.visibility === 'hidden') return 0;
+      o *= parseFloat(cs.opacity);
+    }
+    return o;
+  }
+  window.__textRects = function (t) {
+    var r = cv.getBoundingClientRect(), root = document.getElementById('root').getBoundingClientRect();
+    return [{ id: 'dusk', text: TEXT, opacity: seen(cv),
+              rect: [r.left - root.left + 24 - PEN / 2, r.top - root.top + 48 - m.actualBoundingBoxAscent - PEN / 2,
+                     m.width + PEN, m.actualBoundingBoxAscent + m.actualBoundingBoxDescent + PEN] }];
+  };
+})();
+</script>
+'''
+
+
+def _dusk(pd, fill, pen):
+    p = os.path.join(pd, 'scenes', B, 'markup.html')
+    _edit(p, '</span>»</span>\n</div>', '</span>»</span>' + DUSK + '</div>' + DUSK_JS % {'fill': fill, 'pen': pen})
+
+
+def p_canvas_gold(pd):
+    """Сцена рисует фразу на canvas светлым по светлому тёплому фону и честно объявляет её область."""
+    _dusk(pd, 'accent_pale', 0)
+
+
+def p_canvas_outline(pd):
+    """Та же фраза светлой заливкой с тёмной обводкой вплотную — читается."""
+    _dusk(pd, 'paper', 8)
+
+
 # (имя, вид, правка, подстрока): scenes — правка копии проекта и build.py --page на ней;
 # project — правка конфигов копии без пересборки (страница та же); page — правка копии страницы и новый промер
 RED_SLOW = [
@@ -1081,6 +1167,7 @@ RED_SLOW = [
     ('в text/ нет надписи', 'project+', p_text_missing, 'V4 текст: «Руководитель группы» (#demo-b--card1) нет в источнике'),
     ('имя ведущей в демо-разметке', 'project', p_theme_in_demo, 'V19 сторож тематики: «имя ведущей прошлого ролика» в '),
     ('файл шрифта битый', 'page', pp_font_broken, 'V11 шрифт: Liberation Sans Narrow — статус error'),
+    ('золото на закате: canvas сцены и её __textRects', 'scenes', p_canvas_gold, 'V37 читаемость: canvas «dusk»'),
     ('видео короче звука', 'video', v_trim, 'V1 длительность: видео'),
     ('ролик обрезан вместе со звуком', 'video', v_both_short, 'а последняя реплика кончается'),
 ]
@@ -1088,6 +1175,7 @@ RED_SLOW = [
 SAMPLES_SLOW = [
     ('text/ полный — V4 зелёный, не SKIP', 'project+', p_text_full, 'OK   V4'),
     ('запрет снят в project.json', 'project', p_theme_allowed, 'OK   V19'),
+    ('обводка на canvas сцены читается', 'scenes', p_canvas_outline, 'OK   V37'),
     ('видео как есть — V1 по mp4', 'video', v_same, 'OK   V1 длительность и время'),
 ]
 
@@ -1101,83 +1189,31 @@ def _calibrated(film, only):
     return True
 
 
-def _base(root, out_dir):
-    # порчи промера калиброваны на страницу: длина — film.json; видео (если оно есть) мерит порча вида video
-    base = C.make_ctx(root, out_dir, page_only=True)
-    bad, lines = C.run(base, quiet=True)
-    if bad:
-        print('Исходный фильм уже красный — порчи бессмысленны:\n' + '\n'.join(l for l in lines if l.startswith('FAIL')))
-        return None
-    return base
-
-
-def _verdict(name, lines, expect):
-    hit = [l for l in lines if l.startswith('FAIL') and expect in l]
-    if hit:
-        print('RED  %-40s → %s' % (name, hit[0][5:]))
-        return 0
-    got = [l for l in lines if l.startswith('FAIL')] or ['(всё зелёное)']
-    print('MISS %-40s ждали «%s», получили: %s' % (name, expect, ' | '.join(got)[:600]))
-    return 1
-
-
 def red_fast(root, out_dir, film, only, filt=None):
     if not _calibrated(film, only):
         return 1
-    t_start = time.time()
-    base = _base(root, out_dir)
+    base = redrun.base(root, out_dir)
     if base is None:
         return 1
-    failed = n = 0
-    for name, fn, expect in RED_FAST:
-        if filt and filt not in name:
-            continue
-        n += 1
-        ctx = C.fresh(base)
-        tmp = tempfile.mkdtemp(prefix='motion_red_')
-        try:
-            fn(ctx, tmp)
-            _, lines = C.run(ctx, quiet=True)
-        finally:
-            shutil.rmtree(tmp, ignore_errors=True)
-        failed += _verdict(name, lines, expect_of(ctx, expect))
-    print('быстрые порчи: %d, не покраснело своей строкой: %d · %.0f с' % (n, failed, time.time() - t_start))
-    return 1 if failed else 0
+    return redrun.fast(RED_FAST, lambda row: base, filt, expect_of=expect_of)
 
 
 def samples(root, out_dir, film, only, filt=None):
     if not _calibrated(film, only):
         return 1
-    base = _base(root, out_dir)
+    base = redrun.base(root, out_dir)
     if base is None:
         return 1
-    failed = n = 0
-    for name, fn in SAMPLES:
-        if filt and filt not in name:
-            continue
-        n += 1
-        ctx = C.fresh(base)
-        tmp = tempfile.mkdtemp(prefix='motion_smp_')
-        try:
-            fn(ctx, tmp)
-            bad, lines = C.run(ctx, quiet=True)
-        finally:
-            shutil.rmtree(tmp, ignore_errors=True)
-        if bad:
-            failed += 1
-            print('MISS образец «%s» покраснел: %s' % (name, ' | '.join(l for l in lines if l.startswith('FAIL'))[:600]))
-        else:
-            print('ok   образец %-40s — молча' % name)
-    print('образцы: %d, покраснело: %d' % (n, failed))
-    return 1 if failed else 0
+    return redrun.samples(SAMPLES, base, filt)
 
 
 def _copy_project(root, dst):
     shutil.copytree(root, dst, ignore=shutil.ignore_patterns('out', 'node_modules', '.env', '__pycache__'))
 
 
-def _slow_one(base, root, out_dir, film, kind, fn):
-    """→ строки отчёта check по порченой копии. Поставка (проект и его out/) не трогается."""
+def _slow_one(base, root, out_dir, film, kind, fn, eye=False):
+    """→ строки отчёта check по порченой копии. Поставка (проект и его out/) не трогается. eye — порча про V36/V37:
+    у новой страницы снимаются кадры полосы; иначе у той же страницы берутся кадры исходной, у новой — не снимаются."""
     tmp = tempfile.mkdtemp(prefix='motion_slow_')
     try:
         pd = os.path.join(tmp, 'project')
@@ -1211,6 +1247,10 @@ def _slow_one(base, root, out_dir, film, kind, fn):
             if not os.path.exists(os.path.join(od, 'probe.json')):
                 return ['FAIL промер порченой страницы не дал probe.json: ' + (r.stdout + r.stderr).strip()[-400:]]
             ctx = C.make_ctx(root, od, page_only=True)
+        if kind.startswith('project') or kind == 'video':
+            ctx['eye'] = copy.deepcopy(base.get('eye'))        # страница та же — кадры полосы те же
+        elif not eye:
+            ctx['eye'] = False                                 # порча не про V36/V37: кадры копии не снимаем
         _, lines = C.run(ctx, quiet=True)
         return lines
     finally:
@@ -1220,34 +1260,17 @@ def _slow_one(base, root, out_dir, film, kind, fn):
 def red_slow(root, out_dir, film, only, filt=None):
     if not _calibrated(film, only):
         return 1
-    t_start = time.time()
-    base = _base(root, out_dir)
+    base = redrun.base(root, out_dir)
     if base is None:
         return 1
-    failed = n = 0
     has_video = os.path.exists(os.path.join(out_dir, 'video.mp4'))
-    for name, kind, fn, expect in RED_SLOW:
-        if filt and filt not in name:
-            continue
-        if kind == 'video' and not has_video:
-            print('SKIP %-40s ролик не отрендерен (нет video.mp4) — сначала build.py demo на копии проекта' % name)
-            continue
-        n += 1
-        failed += _verdict(name, _slow_one(base, root, out_dir, film, kind, fn), expect)
-    for name, kind, fn, expect in SAMPLES_SLOW:
-        if filt and filt not in name:
-            continue
-        if kind == 'video' and not has_video:
-            print('SKIP образец %-33s ролик не отрендерен (нет video.mp4)' % name)
-            continue
-        n += 1
-        lines = _slow_one(base, root, out_dir, film, kind, fn)
-        bad = [l for l in lines if l.startswith('FAIL')]
-        if bad or not any(l.startswith(expect) for l in lines):
-            failed += 1
-            print('MISS образец «%s»: ждали «%s» и ни одного FAIL, получили: %s'
-                  % (name, expect, ' | '.join(bad or [l for l in lines if 'V4' in l or 'V19' in l])[:600]))
-        else:
-            print('ok   образец %-40s — молча (%s)' % (name, expect.strip()))
-    print('медленные порчи и образцы: %d, не так, как ждали: %d · %.0f с' % (n, failed, time.time() - t_start))
-    return 1 if failed else 0
+
+    def skip(row):
+        if row[1] == 'video' and not has_video:
+            return 'ролик не отрендерен (нет video.mp4) — сначала build.py demo на копии проекта'
+        return None
+
+    def lines_of(row):
+        name, kind, fn, expect = row
+        return _slow_one(base, root, out_dir, film, kind, fn, eye='V36' in expect or 'V37' in expect)
+    return redrun.slow(RED_SLOW, SAMPLES_SLOW, lines_of, lambda row: row[3], filt, skip)

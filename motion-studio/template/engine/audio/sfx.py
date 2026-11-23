@@ -30,8 +30,24 @@ film.json styles[стиль].sfx.clips (поля grit, crackle, lp_hz — synth.
 
 Уровень — на эффект, по промеру: максимум RMS скользящего окна 400 мс в каждом куске эффекта
 под репликой ≤ RMS реплики + цель, в паузе ≤ среднее RMS соседних реплик + цель.
+
+Фильм без голоса (music.json without_voice: true, ни одной реплики с mp3): опора — музыка. gain_db — дБ
+относительно RMS музыки (после огибающей) в окне [начало − music_ref_pad_sec, конец + music_ref_pad_sec];
+предел сборки over_music_target_db, предел проверки over_music_max_db. Проба тогда — куски готового микса
+(музыка + эффекты) вокруг эффектов подряд, между кусками — тишина proba.gap_sec; микс собирает
+music.build, sfx.py зовёт его сам.
+
+Кроме film.json.events есть ещё два источника событий:
+    act   метки мира film.json.acts {id, t, scene, who, do, span}: поля события — ref (= id), who, do, dur (= span);
+    mark  звуки, названные режиссёром в раскадровке: scenes/<сцена>/storyboard.json plugins.act.cues[].sfx[]
+          {name, t: {reply, at, offset?}, role}; поля события — name, role, cue, ref (= cue/name). Время —
+          по строкам film.json.replies, как в engine/video/build.py. Метка без правила — ошибка сборки,
+          если её имени нет в silent_marks {имя: причина} (раскадровка: «озвучен либо молчит с причиной»).
+Поля правила сверх основных: shift_sec — удар позже события на столько (± с); texture: true — фактура:
+вне правила плотности min_gap_sec (акценты не ближе min_gap_sec, фактура между ними).
 """
 import array
+import json
 import math
 import os
 import shutil
@@ -43,6 +59,9 @@ sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))      # <проект>/engine
+import deps     # noqa: E402
+deps.need('imageio_ffmpeg')     # нет пакета — строка «нет: … — поставь: …» и код 2, без трассировки
 import config   # noqa: E402
 import dsp     # noqa: E402
 import synth   # noqa: E402
@@ -50,7 +69,7 @@ import synth   # noqa: E402
 SR = synth.SR
 FRAME = 0.005               # кадр промера уровня, с
 WIN = 0.4                   # окно RMS, с
-EVENT_KINDS = ('show', 'hide', 'level', 'emph', 'move', 'seam', 'chapter', 'title')
+EVENT_KINDS = ('show', 'hide', 'level', 'emph', 'move', 'seam', 'chapter', 'title', 'act', 'mark')
 ANCHORS = ('start', 'end', 'mid')
 DEFAULT_VARIANTS = 3
 
@@ -74,9 +93,12 @@ def load_rules(cfg):
         if r.get('lead_sec') is not None and r['clip'] not in synth.LEADABLE:
             raise SystemExit('%s: lead_sec есть только у %s' % (where, ', '.join(synth.LEADABLE)))
         if r['gain_db'] > 0:
-            raise SystemExit('%s: gain_db — дБ относительно речи, ждали ≤ 0' % where)
+            raise SystemExit('%s: gain_db — дБ относительно речи (без голоса — музыки), ждали ≤ 0' % where)
+        if not isinstance(r.get('shift_sec', 0.0), (int, float)) or not isinstance(r.get('texture', False), bool):
+            raise SystemExit('%s: shift_sec — число секунд, texture — true | false' % where)
         rules.append(dict(r, variants=max(1, int(r.get('variants', DEFAULT_VARIANTS))),
-                          anchor=r.get('anchor', 'start'), match=r.get('match') or {}))
+                          anchor=r.get('anchor', 'start'), match=r.get('match') or {},
+                          shift_sec=float(r.get('shift_sec', 0.0)), texture=bool(r.get('texture', False))))
     return rules
 
 
@@ -97,6 +119,45 @@ def style_materials(film):
             for s in (film or {}).get('scenes', [])}
 
 
+def anchor_t(a, film):
+    """Якорь {reply, at, offset?} → секунда фильма (как engine/video/build.py: начало + доля × длина + сдвиг)."""
+    if isinstance(a, (int, float)):
+        return float(a)
+    r = next((r for r in film.get('replies', []) if r.get('num', r.get('n')) == a['reply']), None)
+    if r is None:
+        raise SystemExit('метка звука: строки %s нет в film.json.replies' % a['reply'])
+    return r['start'] + a.get('at', 0.0) * (r['end'] - r['start']) + a.get('offset', 0.0)
+
+
+def act_events(film):
+    """film.json.acts → события вида act."""
+    return [{'kind': 'act', 't': a['t'], 'scene': a['scene'], 'ref': a['id'], 'who': a.get('who'), 'do': a.get('do'),
+             'dur': a.get('span', 0.0)} for a in (film or {}).get('acts', [])]
+
+
+def mark_events(scenes_dir, film):
+    """Звуки, названные в раскадровках сцен фильма (plugins.act.cues[].sfx[]) → события вида mark."""
+    out = []
+    for s in (film or {}).get('scenes', []):
+        p = os.path.join(str(scenes_dir), s['id'], 'storyboard.json')
+        if not os.path.exists(p):
+            continue
+        with open(p, encoding='utf-8-sig') as fh:
+            sb = json.load(fh)
+        for cue in ((sb.get('plugins') or {}).get('act') or {}).get('cues', []):
+            for m in cue.get('sfx') or []:
+                out.append({'kind': 'mark', 't': round(anchor_t(m['t'], film), 4), 'scene': s['id'],
+                            'ref': '%s/%s' % (cue['id'], m['name']), 'name': m['name'], 'role': m.get('role'),
+                            'cue': cue['id'], 'dur': 0.0})
+    return out
+
+
+def film_events(audio, film):
+    """Все события звука: film.json.events + acts + метки раскадровок."""
+    sd = audio.dir / ((audio.meta.get('paths') or {}).get('scenes') or 'scenes')
+    return list(film.get('events', [])) + act_events(film) + mark_events(sd, film)
+
+
 def plan(events, cfg, film=None):
     """События фильма → (эффекты, выпавшие по плотности).
 
@@ -108,11 +169,15 @@ def plan(events, cfg, film=None):
     min_gap = float(cfg.get('min_gap_sec', 1.5))
     keep = int(cfg.get('keep_prio', 9))
     cues = []
+    silent = cfg.get('silent_marks') or {}
     for e in sorted(events, key=lambda x: (x['t'], x['kind'], str(x.get('ref')))):
         r = rule_for(rules, e)
         if r is None:
+            if e['kind'] == 'mark' and e.get('name') not in silent:
+                raise SystemExit('метка звука %s (сцена %s, t=%.3f) без правила в sfx.json: добавь правило kind "mark" '
+                                 'или имя в silent_marks с причиной' % (e['ref'], e.get('scene'), e['t']))
             continue
-        shift = {'start': 0.0, 'end': e.get('dur', 0.0), 'mid': e.get('dur', 0.0) / 2}[r['anchor']]
+        shift = {'start': 0.0, 'end': e.get('dur', 0.0), 'mid': e.get('dur', 0.0) / 2}[r['anchor']] + r['shift_sec']
         hit = e['t'] + shift
         lead = synth.lead_of(r['clip'], r.get('lead_sec'))
         if hit - lead < -1e-9:
@@ -120,6 +185,7 @@ def plan(events, cfg, film=None):
                              'сдвинь событие или укороти lead_sec' % (r['clip'], e['kind'], e.get('ref'), e['t'], hit - lead))
         cues.append({'event': {k: e.get(k) for k in ('kind', 'ref', 't', 'scene')}, 'clip': r['clip'],
                      'prio': r['prio'], 'hit': round(hit, 4), 'onset': round(hit - lead, 4), 'lead': lead, 'rule': r,
+                     'texture': r['texture'],
                      'material': mats.get(e.get('scene'), {}).get(r['clip'])})
     cues.sort(key=lambda c: (c['onset'], c['event']['kind'], str(c['event']['ref'])))
     count = {}
@@ -135,6 +201,8 @@ def plan(events, cfg, film=None):
                                                            by['event']['ref'])})
 
     for c in cues:
+        if c['texture']:        # фактура вне правила плотности
+            continue
         lost = False
         while kept and c['onset'] - kept[-1]['onset'] < min_gap:
             prev = kept[-1]
@@ -152,6 +220,8 @@ def plan(events, cfg, film=None):
                 break
         if not lost:
             kept.append(c)
+    kept = sorted(kept + [c for c in cues if c['texture']],
+                  key=lambda c: (c['onset'], c['event']['kind'], str(c['event']['ref'])))
     for i, c in enumerate(kept):
         c['id'] = 'fx%02d' % (i + 1)
     return kept, dropped
@@ -229,17 +299,23 @@ def segments(replies, speech_db, t0, t1, dur, under_target, pause_target):
     return out
 
 
-def place(cues, clips, replies, speech_db, dur, cfg):
-    """Уровень каждого эффекта (дБ к клипу) и дорожка фильма array('f') — до итоговой поправки."""
+def place(cues, clips, replies, speech_db, dur, cfg, ref_db=None):
+    """Уровень каждого эффекта (дБ к клипу) и дорожка фильма array('f') — до итоговой поправки.
+    ref_db(t0, t1) → дБ музыки: фильм без голоса, опора — музыка вокруг эффекта (иначе — речь)."""
     under = float(cfg.get('under_speech_target_db', -21.0))
     pause = float(cfg.get('pause_target_db', -12.0))
+    over = float(cfg.get('over_music_target_db', -6.0))
+    pad = float(cfg.get('music_ref_pad_sec', 1.0))
     n = int(round(dur * SR))
     track = array.array('f', bytes(4 * n))
     for c in cues:
         x = clips[c['id']]
         i0 = int(round(c['onset'] * SR))
         fr = frame_energy(x, i0)
-        segs = segments(replies, speech_db, c['onset'], c['end'], dur, under, pause)
+        if ref_db is not None:
+            segs = [(c['onset'], c['end'], 'музыка', ref_db(max(0.0, c['onset'] - pad), min(dur, c['end'] + pad)), over)]
+        else:
+            segs = segments(replies, speech_db, c['onset'], c['end'], dur, under, pause)
         g = None
         for a, b, what, ref, lim in segs:
             m = max_win_db(fr, a, b)
@@ -253,8 +329,8 @@ def place(cues, clips, replies, speech_db, dur, cfg):
         k = 10 ** (g / 20)
         lv = [(max_win_db(fr, a, b) + g - ref, what) for a, b, what, ref, lim in segs if max_win_db(fr, a, b) > -150]
         worst = max(lv)
-        c['level'] = {'rel_db': round(worst[0], 1), 'where': 'пауза' if worst[1] == 'пауза' else 'реплика',
-                      'at': worst[1]}
+        c['level'] = {'rel_db': round(worst[0], 1), 'at': worst[1],
+                      'where': worst[1] if worst[1] in ('пауза', 'музыка') else 'реплика'}
         for i, v in enumerate(x):
             j = i0 + i
             if 0 <= j < n:
@@ -266,14 +342,14 @@ def cue_record(c):
     """Метка эффекта для cues.json: без внутренностей правила."""
     return {'id': c['id'], 'event': c['event'], 'clip': c['clip'], 'variant': c['variant'], 'prio': c['prio'],
             'onset': c['onset'], 'hit': c['hit'], 'end': c['end'], 'file': c['file'], 'gain_db': c['gain_db'],
-            'level': c['level'], 'material': c.get('material')}
+            'level': c['level'], 'material': c.get('material'), 'texture': c.get('texture', False)}
 
 
-def build_track(audio, film, replies, speech_db):
+def build_track(audio, film, replies, speech_db, ref_db=None):
     """План → синтез → уровни: (дорожка до поправки микса, эффекты, выпавшие, клипы)."""
-    cues, dropped = plan(film.get('events', []), audio.sfx, film)
+    cues, dropped = plan(film_events(audio, film), audio.sfx, film)
     clips = render(cues)
-    track = place(cues, clips, replies, speech_db, film['duration'], audio.sfx)
+    track = place(cues, clips, replies, speech_db, film['duration'], audio.sfx, ref_db)
     return track, cues, dropped, clips
 
 
@@ -326,13 +402,79 @@ def proba(audio, film, replies, cues, track, tmp):
     return take, total
 
 
+def proba_music(audio, cues, tmp):
+    """Проба фильма без голоса: куски mix.m4a (музыка + эффекты) по одному звуку подряд, между ними тишина.
+    В один кусок идут только звуки, которые сами перекрываются; поля pad_sec не заходят на соседний звук.
+    Возвращает [(с, по, [id])]."""
+    pr = audio.sfx.get('proba') or {}
+    pad, gap = float(pr.get('pad_sec', 0.4)), float(pr.get('gap_sec', 0.8))
+    dur = audio.film()['duration']
+    groups = []
+    for c in sorted(cues, key=lambda c: c['onset']):
+        if groups and c['onset'] < groups[-1][1]:
+            groups[-1][1] = max(groups[-1][1], c['end'])
+            groups[-1][2].append(c['id'])
+        else:
+            groups.append([c['onset'], c['end'], [c['id']]])
+    wins = []
+    for i, (a, b, ids) in enumerate(groups):
+        lo = groups[i - 1][1] if i else 0.0
+        hi = groups[i + 1][0] if i + 1 < len(groups) else dur
+        wins.append([max(lo, a - pad), min(hi, b + pad), ids])
+    k = len(wins)
+    parts = ['[0:a]asplit=%d%s' % (k, ''.join('[p%d]' % i for i in range(k)))]
+    for i, (a, b, _) in enumerate(wins):
+        parts.append('[p%d]atrim=%.4f:%.4f,asetpts=PTS-STARTPTS,afade=t=in:d=0.08,afade=t=out:st=%.4f:d=0.15,'
+                     'apad=pad_dur=%.3f[q%d]' % (i, a, b, max(0.0, b - a - 0.15), gap, i))
+    parts.append('%sconcat=n=%d:v=0:a=1[o]' % (''.join('[q%d]' % i for i in range(k)), k))
+    fc = os.path.join(tmp, 'proba.txt')
+    with open(fc, 'w', encoding='utf-8') as fh:
+        fh.write(';'.join(parts))
+    tmp_mp3 = str(audio.proba) + '.tmp'
+    dsp.run([dsp.FF, '-v', 'error', '-y', '-i', str(audio.mix_m4a), '-filter_complex_script', fc, '-map', '[o]',
+             '-c:a', 'libmp3lame', '-b:a', '192k'] + dsp.BITEXACT + ['-f', 'mp3', tmp_mp3])
+    os.replace(tmp_mp3, str(audio.proba))
+    return [tuple(w) for w in wins]
+
+
 def print_plan(cues, dropped):
     for c in cues:
-        print('  %s %-12s v%d  удар %8.3f  начало %8.3f  %-8s %-24s %+6.1f дБ к речи (%s)'
+        print('  %s %-12s v%d  удар %8.3f  начало %8.3f  %-5s %-28s %+6.1f дБ к %s%s'
               % (c['id'], c['clip'], c['variant'], c['hit'], c['onset'], c['event']['kind'], c['event']['ref'],
-                 c['level']['rel_db'], c['level']['at']))
+                 c['level']['rel_db'], 'музыке' if c['level']['where'] == 'музыка' else 'речи (%s)' % c['level']['at'],
+                 ' · фактура' if c.get('texture') else ''))
     for d in dropped:
         print('  выпал %s %.3f: %s' % (d['event'], d['hit'], d['reason']))
+
+
+def main_music(audio, film_name):
+    """Фильм без голоса: эффекты меряются от музыки, поэтому сначала весь звук (music.build), потом клипы и проба."""
+    import music
+    tmp = tempfile.mkdtemp(prefix='motion-sfx-')
+    try:
+        cues, clips = music.build(audio, tmp, keep_clips=True)
+        sdir = audio.out / 'sfx'
+        os.makedirs(sdir, exist_ok=True)
+        for f in os.listdir(sdir):
+            if f.endswith('.wav'):
+                os.remove(sdir / f)
+        for c in cues['sfx']:
+            synth.write_wav(sdir / c['file'], clips[c['id']])
+        config.write_json(audio.out / 'sfx-cues.json', {'film': film_name, 'sfx': cues['sfx'],
+                                                        'sfx_dropped': cues['sfx_dropped']})
+        if not cues['sfx']:
+            raise SystemExit('в фильме нет событий каталога sfx.json — пробы нет')
+        wins = proba_music(audio, cues['sfx'], tmp)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    gap = float((audio.sfx.get('proba') or {}).get('gap_sec', 0.8))
+    at = 0.0
+    for a, b, ids in wins:
+        print('  проба %6.2f с: фильм %6.2f–%6.2f  %s' % (at, a, b, ', '.join(
+            '%s %s' % (i, next(c['event']['ref'] for c in cues['sfx'] if c['id'] == i)) for i in ids)))
+        at += b - a + gap
+    print('  проба: %d кусков, %.1f с → %s' % (len(wins), at, audio.proba))
+    print('  →', audio.out / 'sfx', '·', audio.out / 'sfx-cues.json')
 
 
 def main():
@@ -340,6 +482,8 @@ def main():
     audio = config.Audio(pdir, film_name)
     film = audio.film()
     replies = audio.replies(film)
+    if not replies:
+        return main_music(audio, film_name)
     speech_db = dsp.speech_levels(audio, replies)
     track, cues, dropped, clips = build_track(audio, film, replies, speech_db)
     sdir = audio.out / 'sfx'

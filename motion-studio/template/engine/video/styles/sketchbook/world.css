@@ -1,5 +1,5 @@
 /* Скетчбук, режим «мир» (не кладётся при project.json style_brand_lock: true).
    Заголовок сцены — рукописным шрифтом стиля (--sty-sketchbook-title объявляет сборка из style.json fonts);
    цвет заголовка — роль бренда, как был. Основной текст не трогать (V22). */
-/* кегль 39 px: у рукописного шрифта строка 1,75 кегля — так строка помещается в рамку заголовка каркаса (V10) */
-#root[data-style="sketchbook"] .fr-title { font-family: var(--sty-sketchbook-title); font-size: 39px; letter-spacing: 0.5px; }
+/* кегль 54 px: у рукописного шрифта (Caveat) буква мельче кегля, а строка — 1,26 кегля: так строка помещается в рамку заголовка каркаса (V10) */
+#root[data-style="sketchbook"] .fr-title { font-family: var(--sty-sketchbook-title); font-size: 54px; letter-spacing: 0.5px; }

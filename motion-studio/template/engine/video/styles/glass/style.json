@@ -8,9 +8,9 @@
   "neon_pink": "#E040FB", "neon_cyan": "#22D3EE", "neon_violet": "#7C3AED", "neon_blue": "#3B82F6"
  },
  "fonts": {
-  "title": {"family": "Segoe UI Light", "files": ["segoeuil.ttf", "segoeuisl.ttf", "calibril.ttf"], "weight": 300,
-            "note": "тонкий гротеск, системный Windows (кириллица проверяется сборкой); нет файла — заголовок фирменным"},
-  "decor": {"family": "Segoe UI Semilight", "files": ["segoeuisl.ttf", "segoeui.ttf"], "weight": 400}
+  "title": {"family": "Open Sans", "files": ["OpenSans-wdth-wght.ttf"], "weight": 300,
+             "note": "тонкий гротеск, файл движка под OFL (assets/fonts/README.md); свой шрифт — файлом в <проект>/assets/fonts, первым в files"},
+  "decor": {"family": "Open Sans", "files": ["OpenSans-wdth-wght.ttf"], "weight": 400}
  },
  "objects": ["ring", "orb", "shard", "capsule", "glint", "wave", "blobs", "panes"],
  "params": {

@@ -9,9 +9,9 @@
   "pencil_body": "#F2C230", "pencil_wood": "#EBCB9F"
  },
  "fonts": {
-  "title": {"family": "Segoe Print", "files": ["segoeprb.ttf", "segoepr.ttf", "comicbd.ttf"], "weight": 700,
-            "note": "рукописный, системный Windows (кириллица проверяется сборкой); нет файла — заголовок фирменным"},
-  "decor": {"family": "Segoe Print", "files": ["segoepr.ttf", "comic.ttf"], "weight": 400}
+  "title": {"family": "Caveat", "files": ["Caveat-wght.ttf"], "weight": 700,
+             "note": "рукописный, файл движка под OFL (assets/fonts/README.md); свой шрифт — файлом в <проект>/assets/fonts, первым в files"},
+  "decor": {"family": "Caveat", "files": ["Caveat-wght.ttf"], "weight": 400}
  },
  "objects": ["cube", "plane", "flowers", "sun", "cloud", "house", "arrow", "pencil"],
  "params": {

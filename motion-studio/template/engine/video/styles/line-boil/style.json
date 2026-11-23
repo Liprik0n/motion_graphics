@@ -9,9 +9,9 @@
   "cloud": "#FFFFFF", "sun": "#F4C84A"
  },
  "fonts": {
-  "title": {"family": "Comic Sans MS", "files": ["comicbd.ttf", "segoeprb.ttf"], "weight": 700,
-            "note": "округлый рукописный, системный Windows (кириллица проверяется сборкой); нет файла — заголовок фирменным"},
-  "decor": {"family": "Comic Sans MS", "files": ["comic.ttf", "segoepr.ttf"], "weight": 400}
+  "title": {"family": "Comic Relief", "files": ["ComicRelief-Bold.ttf"], "weight": 700,
+             "note": "округлый рукописный, файл движка под OFL (assets/fonts/README.md); свой шрифт — файлом в <проект>/assets/fonts, первым в files"},
+  "decor": {"family": "Comic Relief", "files": ["ComicRelief-Regular.ttf"], "weight": 400}
  },
  "objects": ["house", "tree", "plane", "cloud", "fence", "grass", "hills", "sun"],
  "params": {

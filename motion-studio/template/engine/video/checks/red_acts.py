@@ -19,11 +19,11 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import time
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))     # engine/video
 sys.path.insert(0, HERE)
 import check as C      # noqa: E402
+from checks import redrun            # noqa: E402  прогон порч — один на все файлы порч
 
 FILM, HIDE_FILM = 'acts', 'acts-hide'
 ST, SG = 'act-stage', 'act-sign'
@@ -537,26 +537,6 @@ def _calibrated(film, only):
     return True
 
 
-def _base(root, out_dir):
-    base = C.make_ctx(root, out_dir, page_only=True)
-    bad, lines = C.run(base, quiet=True)
-    if bad:
-        print('Исходный фильм %s уже красный — порчи бессмысленны:\n' % os.path.basename(out_dir)
-              + '\n'.join(l for l in lines if l.startswith('FAIL')))
-        return None
-    return base
-
-
-def _verdict(name, lines, expect):
-    hit = [l for l in lines if l.startswith('FAIL') and expect in l]
-    if hit:
-        print('RED  %-40s → %s' % (name, hit[0][5:]))
-        return 0
-    got = [l for l in lines if l.startswith('FAIL')] or ['(всё зелёное)']
-    print('MISS %-40s ждали «%s», получили: %s' % (name, expect, ' | '.join(got)[:600]))
-    return 1
-
-
 def _bases(root, out_dir):
     hide_dir = os.path.join(os.path.dirname(out_dir), HIDE_FILM)
     if not os.path.exists(os.path.join(hide_dir, 'probe.json')):      # вариант ещё не собран — собрать его страницу
@@ -566,33 +546,18 @@ def _bases(root, out_dir):
         if r.returncode or not os.path.exists(os.path.join(hide_dir, 'probe.json')):
             print('сборка %s упала: %s' % (HIDE_FILM, (r.stdout + r.stderr).strip()[-400:]))
             return None
-    a, b = _base(root, out_dir), _base(root, hide_dir)
+    a = redrun.base(root, out_dir, 'Исходный фильм %s' % os.path.basename(out_dir))
+    b = redrun.base(root, hide_dir, 'Исходный фильм %s' % os.path.basename(hide_dir))
     return None if a is None or b is None else {FILM: a, HIDE_FILM: b}
 
 
 def red_fast(root, out_dir, film, only, filt=None):
     if not _calibrated(film, only):
         return 1
-    t0 = time.time()
     bases = _bases(root, out_dir)
     if bases is None:
         return 1
-    failed = n = 0
-    for row in RED_FAST:
-        name, fn, expect = row[:3]
-        if filt and filt not in name:
-            continue
-        n += 1
-        ctx = C.fresh(bases[row[3] if len(row) > 3 else FILM])
-        tmp = tempfile.mkdtemp(prefix='motion_red_')
-        try:
-            fn(ctx, tmp)
-            _, lines = C.run(ctx, quiet=True)
-        finally:
-            shutil.rmtree(tmp, ignore_errors=True)
-        failed += _verdict(name, lines, expect)
-    print('быстрые порчи: %d, не покраснело своей строкой: %d · %.0f с' % (n, failed, time.time() - t0))
-    return 1 if failed else 0
+    return redrun.fast(RED_FAST, lambda row: bases[row[3] if len(row) > 3 else FILM], filt)
 
 
 def samples(root, out_dir, film, only, filt=None):
@@ -601,25 +566,7 @@ def samples(root, out_dir, film, only, filt=None):
     bases = _bases(root, out_dir)
     if bases is None:
         return 1
-    failed = n = 0
-    for name, fn in SAMPLES:
-        if filt and filt not in name:
-            continue
-        n += 1
-        ctx = C.fresh(bases[FILM])
-        tmp = tempfile.mkdtemp(prefix='motion_smp_')
-        try:
-            fn(ctx, tmp)
-            bad, lines = C.run(ctx, quiet=True)
-        finally:
-            shutil.rmtree(tmp, ignore_errors=True)
-        if bad:
-            failed += 1
-            print('MISS образец «%s» покраснел: %s' % (name, ' | '.join(l for l in lines if l.startswith('FAIL'))[:600]))
-        else:
-            print('ok   образец %-40s — молча' % name)
-    print('образцы: %d, покраснело: %d' % (n, failed))
-    return 1 if failed else 0
+    return redrun.samples(SAMPLES, bases[FILM], filt)
 
 
 def _copy_project(root, dst):
@@ -638,6 +585,7 @@ def _slow_build(root, fn, film):
         if r.returncode or not os.path.exists(os.path.join(od, 'probe.json')):
             return ['FAIL сборка порченой страницы упала: ' + (r.stdout + r.stderr).strip()[-400:]]
         ctx = C.make_ctx(pd, od, page_only=True)
+        ctx['eye'] = False                      # порча не про V36/V37: кадры полосы копии не снимаем
         _, lines = C.run(ctx, quiet=True)
         return lines
     finally:
@@ -647,23 +595,4 @@ def _slow_build(root, fn, film):
 def red_slow(root, out_dir, film, only, filt=None):
     if not _calibrated(film, only):
         return 1
-    t0 = time.time()
-    failed = n = 0
-    for name, fn, expect, f in RED_SLOW:
-        if filt and filt not in name:
-            continue
-        n += 1
-        failed += _verdict(name, _slow_build(root, fn, f), expect)
-    for name, fn, expect, f in SAMPLES_SLOW:
-        if filt and filt not in name:
-            continue
-        n += 1
-        lines = _slow_build(root, fn, f)
-        bad = [l for l in lines if l.startswith('FAIL')]
-        if bad or not any(l.startswith(expect) for l in lines):
-            failed += 1
-            print('MISS образец «%s»: ждали «%s» и ни одного FAIL, получили: %s' % (name, expect, ' | '.join(bad)[:600]))
-        else:
-            print('ok   образец %-40s — молча (%s)' % (name, expect.strip()))
-    print('медленные порчи и образцы: %d, не так, как ждали: %d · %.0f с' % (n, failed, time.time() - t0))
-    return 1 if failed else 0
+    return redrun.slow(RED_SLOW, SAMPLES_SLOW, lambda row: _slow_build(root, row[1], row[3]), lambda row: row[2], filt)

@@ -56,6 +56,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))           # <проект>/eng
 ENGINE = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 sys.path.insert(0, ENGINE)
+import deps          # noqa: E402
+deps.need('imageio_ffmpeg')     # нет пакета — строка «нет: … — поставь: …» и код 2, без трассировки
 import project_root  # noqa: E402
 import resources     # noqa: E402
 import stamp         # noqa: E402
@@ -116,7 +118,7 @@ def piece_input(cx, pc):
     """Кусок → {args: вход ffmpeg, n: кадров, label, audio: свой звук куска или None, film: имя или None}."""
     if 'film' in pc:
         d = piece_dir(cx, pc)
-        fdir = os.path.join(d, 'frames')
+        fdir = os.path.join(d, stamp.FRAMES)
         if not os.path.isdir(fdir):
             raise SystemExit('кусок %s: нет кадров %s — отрендерь: %s' % (pc['film'], fdir, render_cmd(pc)))
         why = stamp.stale(d)
@@ -132,7 +134,17 @@ def piece_input(cx, pc):
             raise SystemExit('кусок %s: кадров %d, а фильм длиной %d кадров — кусок неполный (пробный рендер --frames?); '
                              'перерендерь: %s' % (pc['film'], n, full, render_cmd(pc)))
         mix = os.path.join(d, MIX)
-        return {'args': ['-framerate', str(cx.fps), '-start_number', '1', '-i', os.path.join(fdir, 'frame_%06d.png')],
+        # кадры куска лежат по сценам (frames/<сцена>/frame_%06d.png, номера сквозные) либо плоско: вход ffmpeg —
+        # на каждый отрезок номеров подряд в одной папке; дыра в номерах — отказ, а не тихий сдвиг картинки
+        runs = stamp.frame_runs(d)
+        gap = [(a, b) for a, b in zip(runs, runs[1:]) if a[1] + a[2] != b[1]]
+        if not runs or runs[0][1] != 1 or gap:
+            raise SystemExit('кусок %s: кадры не подряд с первого (%s) — перерендерь: %s'
+                             % (pc['film'], 'после кадра %d идёт %d' % (gap[0][0][1] + gap[0][0][2] - 1, gap[0][1][1])
+                                if gap else 'нет кадра 1', render_cmd(pc)))
+        inputs = [(['-framerate', str(cx.fps), '-start_number', str(k), '-i', os.path.join(rd, 'frame_%06d.png')], cnt)
+                  for rd, k, cnt in runs]
+        return {'args': inputs[0][0], 'inputs': inputs,
                 'n': n, 'label': 'фильм %s%s' % (pc['film'], ' · ' + pc['style'] if pc.get('style') else ''),
                 'audio': mix if os.path.exists(mix) else None, 'film': pc['film'], 'mix': mix}
     if 'frames' in pc:
@@ -249,11 +261,15 @@ def build(cx, infos, one_audio, silent, dst, cfg, draft):
     total = sum(i['n'] for i in infos)
     sec = total / cx.fps
     cmd = [ffmpeg(), '-hide_banner', '-v', 'error', '-stats', '-y']
+    parts, first = [], []          # входы картинки по порядку: у куска-фильма — по входу на сцену (кэш кадров по сценам)
     for i in infos:
-        cmd += i['args']
-    fc = [video_chain(cx, k, i['n']) for k, i in enumerate(infos)]
-    fc.append(''.join('[v%d]' % k for k in range(len(infos))) + 'concat=n=%d:v=1:a=0[v]' % len(infos))
-    nxt = len(infos)
+        first.append(len(parts))
+        for args, cnt in i.get('inputs') or [(i['args'], i['n'])]:
+            cmd += args
+            parts.append(cnt)
+    fc = [video_chain(cx, k, cnt) for k, cnt in enumerate(parts)]
+    fc.append(''.join('[v%d]' % k for k in range(len(parts))) + 'concat=n=%d:v=1:a=0[v]' % len(parts))
+    nxt = len(parts)
     if one_audio or silent:
         cmd += (['-i', one_audio] if one_audio else ['-f', 'lavfi', '-t', '%.6f' % sec, '-i', 'anullsrc=r=%d:cl=stereo' % AR])
         fc.append(audio_chain(nxt, sec, 'a'))
@@ -262,7 +278,7 @@ def build(cx, infos, one_audio, silent, dst, cfg, draft):
         for k, i in enumerate(infos):
             psec = i['n'] / cx.fps
             if i['audio'] and i['args'][-1] == i['audio']:
-                src = k            # кусок mp4: звук — из того же входа
+                src = first[k]     # кусок mp4: звук — из того же входа
             else:
                 cmd += (['-i', i['audio']] if i['audio']
                         else ['-f', 'lavfi', '-t', '%.6f' % psec, '-i', 'anullsrc=r=%d:cl=stereo' % AR])

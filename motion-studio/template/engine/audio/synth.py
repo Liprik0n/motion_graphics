@@ -210,6 +210,249 @@ def clip_whoosh_click(seed, v, lead):
 DEFAULT_LEAD = 0.55
 
 
+# ---------------------------------------------------------------- звуки мира: мягкие, без внутренних ударов
+# У всех видов ниже удар = начало клипа (lead 0): метка события — там, где звук выходит из тишины.
+# Внутри клипа нет скачков громкости (кадр 5 мс не громче 20 мс перед ним на 9 дБ и больше) —
+# иначе проверка M10 услышит «удар без метки». Тоновые — в соль-мажорной пентатонике (G A B D E).
+G_PENTA = (587.3, 659.3, 784.0, 880.0, 987.8, 1174.7, 1318.5, 1568.0)     # D5 … G6, ряд вверх
+
+
+ONSET_FLOOR = 0.3      # вход звука: за attack — до 0,3 пика (−10 дБ), дальше плавно; без него мягкий звук
+                       # после хвоста соседнего не слышен как начало (и проверка M10 не видит удара)
+
+
+def shape(n, attack, release, peak_at=None):
+    """Огибающая: подъём косинусом за attack с, затем либо полка до release, либо (peak_at — доля длины)
+    подъём от ONSET_FLOOR до пика и спад косинусом к нулю."""
+    out = []
+    na = max(1, int(attack * SR))
+    nr = max(1, int(release * SR))
+    for i in range(n):
+        g = 0.5 - 0.5 * math.cos(math.pi * min(1.0, i / na))
+        if peak_at is not None:
+            x = i / n
+            g *= (ONSET_FLOOR + (1 - ONSET_FLOOR) * math.sin(math.pi / 2 * x / peak_at) if x < peak_at
+                  else math.cos(math.pi / 2 * (x - peak_at) / (1 - peak_at)))
+            g = max(0.0, g)
+        elif i > n - nr:
+            g *= 0.5 + 0.5 * math.cos(math.pi * (i - (n - nr)) / nr)
+        out.append(g)
+    return out
+
+
+def wobble(rng, n, rate_hz, depth):
+    """Медленная случайная модуляция громкости 1 − depth … 1: шум на частоте rate_hz, сглаженный косинусом."""
+    step = max(1, int(SR / rate_hz))
+    pts = [rng.random() for _ in range(n // step + 3)]
+    out = []
+    for i in range(n):
+        k, x = divmod(i, step)
+        w = 0.5 - 0.5 * math.cos(math.pi * x / step)
+        v = pts[k] * (1 - w) + pts[k + 1] * w
+        out.append(1.0 - depth + depth * v)
+    return out
+
+
+def band_noise(rng, n, lo, hi, order=2):
+    x = noise(n, rng)
+    for _ in range(order):
+        x = Biquad('hp', lo).run(x)
+        x = Biquad('lp', hi).run(x)
+    return x
+
+
+def mul(*xs):
+    return [math.prod(v) for v in zip(*xs)]
+
+
+def rustle(seed, sec, lo, hi, rate, depth, peak_at, attack=0.03):
+    """Шорох: полосовой шум с неровной громкостью (бумага, листья, лепестки)."""
+    rng = random.Random(seed)
+    n = int(sec * SR)
+    return mul(band_noise(rng, n, lo, hi), wobble(rng, n, rate, depth), shape(n, attack, 0.0, peak_at))
+
+
+def swell(seed, sec, f0, f1, attack=0.01):
+    """Вжух мира: как whoosh (центр полосы едет вверх, пик на 72 %), но вход — сразу с ONSET_FLOOR."""
+    x = whoosh(seed, sec, f0, f1)
+    n = len(x)
+    peak = 0.72
+    na = max(1, int(attack * SR))
+    out = []
+    for i, v in enumerate(x):
+        u = i / n
+        old = u / peak if u < peak else math.cos(math.pi / 2 * (u - peak) / (1 - peak))
+        new = (ONSET_FLOOR + (1 - ONSET_FLOOR) * u / peak) if u < peak else old
+        g = (new / old if old > 1e-4 else 0.0) * (0.5 - 0.5 * math.cos(math.pi * min(1.0, i / na)))
+        out.append(v * g)
+    return out
+
+
+def grains(seed, sec, rate, f, q, peak_at, attack=0.02):
+    """Сыпучий шорох: плотная россыпь крупинок (импульсы случайной силы через полосовой фильтр)."""
+    rng = random.Random(seed)
+    n = int(sec * SR)
+    x = [0.0] * n
+    p = rate / SR
+    for i in range(n):
+        if rng.random() < p:
+            x[i] = rng.uniform(0.3, 1.0) * (1 if rng.random() < 0.5 else -1)
+    x = Biquad('bp', f, q).run(x)
+    x = Biquad('bp', f * 1.4, q).run(x)
+    for _ in range(2):          # крупинки не шипят над 8 кГц
+        x = Biquad('lp', 4000).run(x)
+    bed = band_noise(rng, n, f * 0.6, min(4000, f * 1.6))
+    m = max(abs(v) for v in x) or 1.0
+    mb = max(abs(v) for v in bed) or 1.0
+    return mul([a / m + 0.35 * b / mb for a, b in zip(x, bed)], shape(n, attack, 0.0, peak_at))
+
+
+def tone(f, sec, attack, tau, amp=1.0):
+    n = int(sec * SR)
+    w = 2 * math.pi * f / SR
+    na = max(1, int(attack * SR))
+    return [amp * math.sin(w * i) * min(1.0, i / na) * math.exp(-i / (tau * SR)) for i in range(n)]
+
+
+def clip_rustle(seed, v, lead):
+    """Шелест бумаги: сухой шорох листа, 1,3 с, пик на трети."""
+    return rustle(seed, 1.3, (1500, 1700, 1350)[v % 3], 5000, 22, 0.75, 0.35), 0.0
+
+
+def clip_fold(seed, v, lead):
+    """Сгиб обложки: шорох большого листа с мягкой «воздушной» подложкой, 1,0 с."""
+    rng = random.Random(seed + 1)
+    n = int(1.0 * SR)
+    top = rustle(seed, 1.0, 700 * (1.0, 1.06, 0.94)[v % 3], 3600, 16, 0.6, 0.45)
+    air = mul(band_noise(rng, n, 120, 600), shape(n, 0.08, 0.0, 0.5))
+    mt, ma = max(abs(x) for x in top) or 1, max(abs(x) for x in air) or 1
+    return [a / mt + 0.6 * b / ma for a, b in zip(top, air)], 0.0
+
+
+def clip_puff(seed, v, lead):
+    """«Пуф» (облачко пыли, муки): мягкий выдох глухого шума с тёплым низом, 0,38 с."""
+    rng = random.Random(seed)
+    n = int(0.38 * SR)
+    na = int(0.012 * SR)
+    env = [min(1.0, i / na) * math.exp(-i / (0.09 * SR)) for i in range(n)]
+    hiss = mul(band_noise(rng, n, 250, (1100, 1250, 1000)[v % 3]), env)
+    body = tone((95.0, 104.0, 88.0)[v % 3], 0.38, 0.008, 0.06)
+    mh = max(abs(x) for x in hiss) or 1
+    return [a / mh + 0.45 * b for a, b in zip(hiss, body)], 0.0
+
+
+def clip_sprinkle(seed, v, lead):
+    """Специи: короткая сыпучая россыпь (щепотка), 0,25 с."""
+    return grains(seed, 0.25, 420, (2600, 2800, 2400)[v % 3], 2.5, 0.3), 0.0
+
+
+def clip_crumble(seed, v, lead):
+    """Осыпание букв: россыпь гуще и ниже, затихает, 0,8 с."""
+    return grains(seed, 0.8, 320, (2100, 2300, 1950)[v % 3], 2.0, 0.25), 0.0
+
+
+def clip_leaves(seed, v, lead):
+    """Шелест листвы и стеблей: 0,95 с, мягче бумаги."""
+    return rustle(seed, 0.95, (900, 1000, 820)[v % 3], 4000, 14, 0.7, 0.35, attack=0.05), 0.0
+
+
+def clip_airy(seed, v, lead):
+    """Лепестки: воздушный тихий шорох, 1,6 с."""
+    return rustle(seed, 1.6, (700, 760, 650)[v % 3], 2600, 8, 0.5, 0.4, attack=0.08), 0.0
+
+
+def clip_bud(seed, v, lead):
+    """«Пинь» бутонов: мягкий хлопок-пузырёк и колокольчик (B5 / D6 / E6), 0,8 с."""
+    n = int(0.8 * SR)
+    f0 = 520.0
+    pop = []
+    ph = 0.0
+    for i in range(n):
+        t = i / SR
+        f = f0 * (1 + min(1.0, t / 0.025))
+        ph += 2 * math.pi * f / SR
+        pop.append(math.sin(ph) * min(1.0, i / (0.003 * SR)) * math.exp(-t / 0.03))
+    b = bell((987.8, 1174.7, 1318.5)[v % 3], 0.3, 0.8, partials=((1.0, 1.0), (2.0, 0.25), (3.0, 0.06)), attack=0.004)
+    return [0.45 * a + c for a, c in zip(pop, b)], 0.0
+
+
+def clip_bulb(seed, v, lead):
+    """Лампочка гирлянды: тихий тёплый щелчок-тон; варианты — ряд пентатоники вверх (лампочки поют гамму)."""
+    rng = random.Random(seed)
+    f = G_PENTA[v % len(G_PENTA)]
+    n = int(0.32 * SR)
+    t1 = tone(f, 0.32, 0.002, 0.035, 0.6)
+    t2 = tone(2 * f, 0.32, 0.002, 0.015, 0.15)
+    glow = tone(f / 2, 0.32, 0.04, 0.12, 0.25)
+    snap = Biquad('lp', 2500).run([u * math.exp(-i / (0.003 * SR)) for i, u in enumerate(noise(n, rng))])
+    return [a + b + c + 0.12 * d for a, b, c, d in zip(t1, t2, glow, snap)], 0.0
+
+
+def clip_ding(seed, v, lead):
+    """Тёплый звон лампочки-акцента: гармонический колокольчик D6 / G6 / E6, 1,6 с."""
+    return bell((1174.7, 1568.0, 1318.5)[v % 3], 0.8, 1.6, partials=((1.0, 1.0), (2.0, 0.25), (3.0, 0.07)),
+                attack=0.004), 0.0
+
+
+def clip_zip(seed, v, lead):
+    """Провод гирлянды пишет строку: короткий восходящий мягкий шорох, 0,55 с."""
+    return swell(seed, 0.55, (700.0, 760.0, 650.0)[v % 3], 2400.0), 0.0
+
+
+def clip_swish(seed, v, lead):
+    """Нырок в букву: тёплый «вжух» 1,55 с, нарастает к 72 % длины и гаснет до шва."""
+    return swell(seed, 1.55, (280.0, 300.0, 260.0)[v % 3], (1200.0, 1300.0, 1100.0)[v % 3], attack=0.02), 0.0
+
+
+def clip_bouquet(seed, v, lead):
+    """Крупный взмах: вжух + шорох крафта и стеблей поверх, 1,4 с."""
+    rng = random.Random(seed + 3)
+    n = int(1.4 * SR)
+    w = swell(seed, 1.4, 300.0, 1400.0, attack=0.02)
+    kraft = mul(band_noise(rng, n, 1500, 4200), wobble(rng, n, 45, 0.85), shape(n, 0.1, 0.0, 0.62))
+    mw, mk = max(abs(x) for x in w) or 1, max(abs(x) for x in kraft) or 1
+    return [a / mw + 0.55 * b / mk for a, b in zip(w, kraft)], 0.0
+
+
+def clip_sparkle(seed, v, lead):
+    """Искры букв: несколько тихих высоких колокольчиков на воздушной подложке, 0,5 с."""
+    rng = random.Random(seed)
+    n = int(0.5 * SR)
+    x = mul(band_noise(rng, n, 2000, 4500), shape(n, 0.01, 0.0, 0.3))
+    m = max(abs(u) for u in x) or 1
+    x = [0.5 * u / m for u in x]
+    notes = (1975.5, 2349.3, 2637.0, 3136.0, 2349.3)
+    for k, f in enumerate(notes):
+        at = 0.0 if k == 0 else rng.uniform(0.05, 0.3)
+        add(x, bell(f, 0.12, 0.25, partials=((1.0, 1.0),), attack=0.012), at, 0.55)
+    return x, 0.0
+
+
+def clip_shimmer(seed, v, lead):
+    """Мерцание (предмет собирается): аккорд G-мажора с медленным дрожанием, мягкий вход, 1,8 с."""
+    rng = random.Random(seed)
+    n = int(1.8 * SR)
+    env = shape(n, 0.02, 0.0, 0.3)
+    out = [0.0] * n
+    for f, g in ((784.0, 0.5), (987.8, 0.4), (1174.7, 0.45), (1568.0, 0.3), (1975.5, 0.2), (2349.3, 0.12)):
+        f *= 1 + rng.uniform(-0.002, 0.002)
+        trem = wobble(rng, n, rng.uniform(4, 8), 0.45)
+        w = 2 * math.pi * f / SR
+        ph = rng.uniform(0, 2 * math.pi)
+        for i in range(n):
+            out[i] += g * trem[i] * math.sin(w * i + ph)
+    return mul(out, env), 0.0
+
+
+def clip_chime_g(seed, v, lead):
+    """Перезвон надписи финала: колокольчики D6-G6-B6 и мягкий верхний D7, 3,0 с (соль мажор)."""
+    x = zeros(3.0)
+    for f, g in ((1174.7, 0.5), (1568.0, 0.4), (1975.5, 0.3)):
+        add(x, bell(f, 1.1, 3.0, partials=((1.0, 1.0), (2.0, 0.2), (3.0, 0.05)), attack=0.004), 0.0, g)
+    add(x, bell(2349.3, 0.8, 2.6, partials=((1.0, 1.0),), attack=0.08), 0.2, 0.2)
+    return x, 0.0
+
+
 def lead_of(clip, lead=None):
     """Смещение главного удара от начала клипа — без синтеза (планировщику нужно до рендера)."""
     sec = lead if lead else DEFAULT_LEAD
@@ -217,7 +460,12 @@ def lead_of(clip, lead=None):
 
 
 CLIPS = {'tick': clip_tick, 'click': clip_click, 'ping': clip_ping, 'bell': clip_bell, 'chime': clip_chime,
-         'thump': clip_thump, 'whoosh': clip_whoosh, 'whoosh_click': clip_whoosh_click}
+         'thump': clip_thump, 'whoosh': clip_whoosh, 'whoosh_click': clip_whoosh_click,
+         # звуки мира ролика без голоса: удар = начало, внутри без ударов
+         'rustle': clip_rustle, 'fold': clip_fold, 'puff': clip_puff, 'sprinkle': clip_sprinkle,
+         'crumble': clip_crumble, 'leaves': clip_leaves, 'airy': clip_airy, 'bud': clip_bud, 'bulb': clip_bulb,
+         'ding': clip_ding, 'zip': clip_zip, 'swish': clip_swish, 'bouquet': clip_bouquet, 'sparkle': clip_sparkle,
+         'shimmer': clip_shimmer, 'chime_g': clip_chime_g}
 LEADABLE = ('whoosh', 'whoosh_click')     # у этих видов длина разгона настраивается `lead_sec`
 
 

@@ -1,7 +1,6 @@
 # Задание звукорежиссёру — <этап: текст в синтез | промер голоса | музыка | эффекты>
 
-Агент `motion-sound` (opus / medium). Читает `SKILL.md`, `process/01-script.md` («Текст
-документа ≠ текст в синтез»), `process/05-voice.md`, `process/06-music.md`, `process/07-sfx.md`.
+Агент `motion-sound` (opus / medium). Что читает до работы — в его карточке `agents/motion-sound.md`.
 
 ```
 ВХОД: rows.json, voices.json, speech_edits.json, music.json, sfx.json проекта; film.json — для эффектов.

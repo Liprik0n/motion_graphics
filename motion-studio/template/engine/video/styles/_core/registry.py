@@ -12,7 +12,7 @@
 У раскадровки "style": null — явно без стиля, даже если фильм или проект его задают.
 Имя "none" в списке проходов — бренд без стиля (кадр для сравнения).
 
-Модель «стиль — целый мир» (spec история 45): стиль владеет фоном кадра, своей палитрой декора (decor),
+Модель «стиль — целый мир»: стиль владеет фоном кадра, своей палитрой декора (decor),
 шрифтом заголовка, набором нарисованных кодом предметов (objects ≥ 5), движением и звуком. Бренд остаётся:
 основной текст — фирменным шрифтом и ролями палитры бренда, --c-* не меняются (check.py V21, V22).
 project.json "style_brand_lock": true — «только фактура»: world.css не кладётся, плагин получает world=false.
@@ -20,6 +20,11 @@ project.json "style_brand_lock": true — «только фактура»: world
 Что проверяется здесь (до сборки, отказом с именем стиля и поля):
 - style.json: только известные поля, name = имя папки, motion, sfx, decor, fonts, objects в своих границах;
   у шрифта стиля обязана быть кириллица (рендер букв против пустого глифа, Pillow);
+  шрифт — файл: папка стиля → <проект>/assets/fonts → engine/video/assets/fonts (шрифты движка под OFL,
+  источник и лицензия — assets/fonts/README.md) → системная папка шрифтов (только свой стиль проекта:
+  системный шрифт не переносится на другую машину и не публикуется, стили движка его не называют);
+  роли шрифтов: title (заголовок каркаса), decor (надписи предметов) и свои роли плагина (латиница, цифры, «_») —
+  у каждой своя переменная --sty-<стиль>-<роль> и cfg.fonts.<роль>;
 - style.css и world.css: каждый селектор привязан к своему стилю — содержит [data-style="<name>"];
   @import, @font-face (шрифты стиля объявляет сборка из fonts), @media — запрещены, @keyframes — только <name>-….
 """
@@ -29,11 +34,13 @@ import re
 
 CORE = os.path.dirname(os.path.abspath(__file__))       # engine/video/styles/_core
 ENGINE_STYLES = os.path.dirname(CORE)                    # engine/video/styles
+ENGINE_FONTS = os.path.join(os.path.dirname(ENGINE_STYLES), 'assets', 'fonts')   # шрифты движка файлами (OFL)
 NONE = 'none'
 
 TOP_KEYS = {'name', 'label', 'description', 'use_for', 'params', 'motion', 'sfx', 'never', 'decor', 'fonts', 'objects',
             '_comment'}
 FONT_ROLES = ('title', 'decor')
+FONT_ROLE_RE = re.compile(r'^[a-z][a-z0-9_]*$')      # своя роль шрифта плагина (вырезки зина: cut_poster, cut_serif…)
 OBJECTS_MIN = 5
 HEX_RE = re.compile(r'^#[0-9A-Fa-f]{6}$')
 CYR_PROBE = 'ЖЁйЫюЩ'
@@ -130,12 +137,14 @@ def validate(name, data, css):
         if not re.match(r'^[a-z][a-z0-9_]*$', role) or not isinstance(hx, str) or not HEX_RE.match(hx):
             raise SystemExit('%s: decor.%s = %r — роль латиницей, цвет #RRGGBB' % (w, role, hx))
     fonts = data['fonts']
-    if not isinstance(fonts, dict) or 'title' not in fonts or set(fonts) - set(FONT_ROLES) - {'_comment'}:
+    if not isinstance(fonts, dict) or 'title' not in fonts:
         raise SystemExit('%s: fonts — {"title": {...}, "decor"?: {...}}, шрифт заголовка обязателен' % w)
-    for role in FONT_ROLES:
-        f = fonts.get(role)
-        if f is None:
-            continue
+    odd = sorted(r for r in fonts if r != '_comment' and not FONT_ROLE_RE.match(r))
+    if odd:
+        raise SystemExit('%s: fonts.%s — имя роли шрифта: латиница, цифры, «_» (title, decor или своя роль плагина)'
+                         % (w, odd[0]))
+    for role in font_roles(fonts):
+        f = fonts[role]
         if isinstance(f, dict) and f.get('kind') == 'code':
             # надпись, нарисованная кодом (пиксельный шрифт, вырезанные буквы): файла нет, рисует plugin.js
             if role != 'title' or set(f) - {'kind', 'note'}:
@@ -211,16 +220,23 @@ def load(name, project_root=None):
     css = {'style.css': opt('style.css'), 'world.css': opt('world.css')}
     validate(name, data, css)
     fonts = {role: (CODE if data['fonts'][role].get('kind') == 'code' else font_file(name, data['fonts'][role], d, project_root))
-             for role in FONT_ROLES if data['fonts'].get(role)}
+             for role in font_roles(data['fonts'])}
     return {'name': name, 'dir': d, 'data': data, 'css': css['style.css'], 'world_css': css['world.css'],
             'plugin': opt('plugin.js'), 'fonts': fonts}
 
 
+def font_roles(fonts):
+    """Роли шрифтов стиля по порядку: title, decor, затем свои роли плагина по алфавиту (порядок — в CSS страницы)."""
+    return [r for r in FONT_ROLES if fonts.get(r) is not None] + sorted(r for r in fonts if r not in FONT_ROLES and r != '_comment')
+
+
 def font_dirs(style_dir, project_root=None):
-    """Где искать файл шрифта стиля: папка стиля, <проект>/assets/fonts, системные шрифты (%WINDIR%/Fonts)."""
+    """Где искать файл шрифта стиля: папка стиля, <проект>/assets/fonts, шрифты движка (engine/video/assets/fonts),
+    последними — системные (%WINDIR%/Fonts): ими пользуется только свой стиль проекта, стили движка — файлами."""
     out = [style_dir]
     if project_root:
         out.append(os.path.join(str(project_root), 'assets', 'fonts'))
+    out.append(ENGINE_FONTS)
     if os.environ.get('WINDIR'):
         out.append(os.path.join(os.environ['WINDIR'], 'Fonts'))
     return out

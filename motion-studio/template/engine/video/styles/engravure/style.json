@@ -8,9 +8,9 @@
   "lamp": "#E9C46A", "rust": "#A8553A"
  },
  "fonts": {
-  "title": {"family": "Linux Libertine G", "files": ["LinLibertine_RB_G.ttf", "palab.ttf", "georgiab.ttf"], "weight": 700,
-            "note": "антиква, системный файл (кириллица проверяется сборкой); нет файла — заголовок фирменным"},
-  "decor": {"family": "Linux Libertine G Italic", "files": ["LinLibertine_RI_G.ttf", "palai.ttf", "georgiai.ttf"], "weight": 400}
+  "title": {"family": "Old Standard TT", "files": ["OldStandard-Bold.ttf"], "weight": 700,
+             "note": "антиква старой печати, файл движка под OFL (assets/fonts/README.md); свой шрифт — файлом в <проект>/assets/fonts, первым в files"},
+  "decor": {"family": "Old Standard TT Italic", "files": ["OldStandard-Italic.ttf"], "weight": 400}
  },
  "objects": ["lighthouse", "ship", "sun", "compass", "birds", "quill", "cartouche", "waves", "frame"],
  "params": {

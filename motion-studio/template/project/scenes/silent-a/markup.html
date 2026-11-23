@@ -1,0 +1,34 @@
+<!-- Демо ролика без голоса: заголовок, четыре точки такта и бегунок. Цвета — только переменные палитры.
+     Исполнители меток act (plugins/act.js) красят внутренность узлов dots и meter: состояние — чистая функция t. -->
+<div class="el" id="head" style="left:360px; top:260px; width:1200px; height:140px;">
+  <span class="t" style="display:block; width:1200px; line-height:140px; text-align:center; font-size:96px; font-weight:700; color:var(--c-ink); white-space:nowrap;">Четыре такта</span>
+</div>
+<div class="el" id="dots" style="left:560px; top:420px; width:800px; height:180px;">
+  <div class="dot" style="position:absolute; left:40px; top:20px; width:80px; height:80px; border-radius:50%; background:var(--c-accent); opacity:0.15;"></div>
+  <div class="dot" style="position:absolute; left:240px; top:20px; width:80px; height:80px; border-radius:50%; background:var(--c-accent); opacity:0.15;"></div>
+  <div class="dot" style="position:absolute; left:440px; top:20px; width:80px; height:80px; border-radius:50%; background:var(--c-accent); opacity:0.15;"></div>
+  <div class="dot" style="position:absolute; left:640px; top:20px; width:80px; height:80px; border-radius:50%; background:var(--c-accent); opacity:0.15;"></div>
+  <span class="t" style="position:absolute; left:0; top:124px; width:800px; line-height:44px; text-align:center; font-size:32px; color:var(--c-text); white-space:nowrap;">доли такта</span>
+</div>
+<div class="el" id="meter" style="left:560px; top:740px; width:800px; height:100px;">
+  <span class="t" style="position:absolute; left:0; top:0px; width:800px; line-height:44px; text-align:center; font-size:32px; color:var(--c-text); white-space:nowrap;">ход такта</span>
+  <div class="track" style="position:absolute; left:0; top:60px; width:800px; height:36px; background:var(--c-primary_pale);"></div>
+  <div class="fill" style="position:absolute; left:0; top:60px; width:0; height:36px; background:var(--c-primary);"></div>
+</div>
+<script>
+/* Исполнители меток act: точка i горит с метки on(i) плавно за span; бегунок идёт 0 → 1 за каждый такт (2 с) */
+(window.ActExec = window.ActExec || []).push(
+  { scene: 'silent-a', who: 'dots', run: function (t, cues) {
+      var dots = document.getElementById('silent-a--dots').querySelectorAll('.dot');
+      for (var i = 0; i < dots.length; i++) dots[i].style.opacity = '0.15';
+      cues.forEach(function (c) {
+        if (c.local >= 0) dots[c.cue.idx].style.opacity = (0.15 + 0.85 * c.e).toFixed(3);
+      });
+  } },
+  { scene: 'silent-a', who: 'meter', run: function (t, cues) {
+      var f = document.getElementById('silent-a--meter').querySelector('.fill');
+      var c = cues[0];
+      var x = c && c.local >= 0 ? (c.local % 2.0) / 2.0 : 0;
+      f.style.width = (800 * x).toFixed(1) + 'px';
+  } });
+</script>

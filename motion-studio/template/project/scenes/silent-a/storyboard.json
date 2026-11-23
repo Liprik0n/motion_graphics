@@ -1,0 +1,26 @@
+{
+ "scene": "silent-a",
+ "title": "Четыре такта",
+ "frame": false,
+ "markup": "markup.html",
+ "notes": "Демо ролика без голоса (films/silent.json). Время — шкала тактов director/silent-timeline.json: реплики 1–4 — немые строки по такту. Четыре точки зажигаются на началах тактов (plugins.act, who dots, do on); движок звука ставит на них фактуру «bulb» без реплик-якорей (sfx.json kind act). На такте 4 — метка звука ding: перезвон на акценте. Бегунок meter идёт по шкале времени фильма. Сцена без единой озвученной реплики.",
+ "start_state": {},
+ "end_state": {},
+ "plugins": {
+  "act": {
+   "cues": [
+    {"id": "on1", "t": {"reply": 1, "at": 0}, "who": "dots", "do": "on", "motion": "gesture", "idx": 0},
+    {"id": "on2", "t": {"reply": 2, "at": 0}, "who": "dots", "do": "on", "motion": "gesture", "idx": 1},
+    {"id": "on3", "t": {"reply": 3, "at": 0}, "who": "dots", "do": "on", "motion": "gesture", "idx": 2},
+    {"id": "on4", "t": {"reply": 4, "at": 0}, "who": "dots", "do": "on", "motion": "gesture", "idx": 3,
+     "sfx": [{"name": "ding", "t": {"reply": 4, "at": 0}, "role": "accent"}]},
+    {"id": "run", "t": {"reply": 1, "at": 0}, "who": "meter", "do": "run", "motion": "gesture"}
+   ]
+  }
+ },
+ "beats": [
+  {"reply": 1, "at": 0, "offset": -0.3, "action": "show", "targets": ["head"], "anim": "rise"},
+  {"reply": 1, "at": 0, "offset": -0.3, "action": "show", "targets": ["dots", "meter"], "anim": "fade"},
+  {"reply": 4, "at": 0.5, "action": "emph", "targets": ["head"], "style": "pulse"}
+ ]
+}

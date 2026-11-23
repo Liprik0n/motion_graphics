@@ -1,0 +1,8 @@
+{
+ "title": "Демо без голоса: две сцены на шкале тактов",
+ "scenes": ["silent-a", "silent-b"],
+ "manifest": "director/silent-timeline.json",
+ "tail_sec": 1.0,
+ "voice_bars": false,
+ "_comment": "Приёмочный фильм ролика без голоса (профиль profiles/card.md): ни одной озвученной реплики. Время событий задаёт шкала тактов director/silent-timeline.json — немые строки {silent: true, ms, scene_start} по 2,0 с на такт (120 ударов в минуту, 4 доли); якорь {reply: <n>, at} в раскадровке — это такт, а не секунда: сдвинулась шкала (ms, scene_start) — сдвинулись события, сцена не ломается. Звук: music.json without_voice [\"silent\"] — музыка без ducking, эффекты от меток act и метки sfx раскадровки (sfx.json kind act / mark), уровни в дБ относительно музыки. Ключи фильма libs и stills нужны только набору букв (card-kit), здесь не заданы."
+}

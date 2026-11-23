@@ -40,10 +40,8 @@
   "red": "#E63946"
  },
  "fonts": {
-  "title": {
-   "kind": "code",
-   "note": "заголовок рисует plugin.js пикселями: StyleCore.pixelText (кириллица — системный Arial, порог 50 %), клетка 5 px (меньше, если строка длиннее рамки) и тень на клетку"
-  }
+  "title": {"kind": "code", "note": "заголовок рисует plugin.js пикселями: StyleCore.pixelText шрифтом декора (Press Start 2P в своём размере 8 px — буква ложится в сетку 8×8 точно), клетка 5 px (меньше, если строка длиннее рамки) и тень на клетку"},
+  "decor": {"family": "Press Start 2P", "files": ["PressStart2P-Regular.ttf"], "weight": 400}
  },
  "objects": [
   "hill",
@@ -67,12 +65,12 @@
    9.0
   ],
   "ground_px": 28,
-  "title_rows": 9,
+  "title_rows": 8,
   "title_cell": 5,
   "title_cell_min": 3,
   "hud_score": 2190,
   "hud_step_sec": 0.5,
-  "hud_rows": 10,
+  "hud_rows": 8,
   "hud_cell": 3,
   "cloud_speed_units": 1.5,
   "coin_frames_sec": 0.2,

@@ -5,7 +5,7 @@
     check_audio.py --red             порчи на синтетическом наборе: каждая краснеет своей строкой
     check_audio.py --samples         законные варианты: проходят молча
 
-Условия (классы дефектов 9, 10, 12 — checklists/defect-classes.md скила):
+Условия:
 
     reply ≠ cache            reply/NNN.mp3 байт в байт = cache/<ключ из манифеста>.mp3;
                              иначе файл чужой, как бы хорошо он ни звучал
@@ -54,17 +54,19 @@ if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
+import deps           # noqa: E402
+deps.need('imageio_ffmpeg')     # нет пакета — строка «нет: … — поставь: …» и код 2, без трассировки
 import project_root   # noqa: E402
 
 PAUSE_FLOOR_DB = -35          # промер: отделяет речь (RMS ~ −30) от фона
 PAUSE_DETECT_SEC = 0.05
 PAUSE_MERGE_SEC = 0.005       # измеритель дробит одну паузу на смежные куски
 PAUSE_EDGE_SEC = 0.05         # тишина у края — окантовка клипа, не пауза
-PAUSE_LONG_SEC = 0.35         # класс дефектов 9
+PAUSE_LONG_SEC = 0.35
 PAUSE_TOL_FRAC = 0.25         # калибровка выше
 PAUSE_TOL_SEC = 0.5
-STRETCH_MAX = 1.6             # класс дефектов 10
-LOUD_SPREAD_DB = 0.5          # класс дефектов 12
+STRETCH_MAX = 1.6
+LOUD_SPREAD_DB = 0.5
 CLIP_PEAK_DB = -0.5
 CUT_GAP_SEC = 0.15            # промер: целые 0,02–0,04 с, обрыв 5 % байт ≥ 0,50 с
 

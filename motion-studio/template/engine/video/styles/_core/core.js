@@ -20,7 +20,9 @@
      slots(zones, n, pad)           квадраты [x, y, s] под предметы мира в зонах сцены (decor_zones)
      drawOn(paths, p)               рисование линией: видна доля p каждого контура
      text(parent, x, y, str, attrs) надпись SVG (шрифт декора — attrs['font-family'] = cfg.fonts.decor)
-     pixelText(parent, str, x, y, o)  пиксельная надпись кодом с кириллицей: o.rows (высота в пикселях), o.cell, o.color
+     pixelText(parent, str, x, y, o)  пиксельная надпись кодом с кириллицей: o.rows (высота в пикселях), o.cell, o.color, o.font
+     fontsReady()                   шрифты страницы загружены (надпись по метрикам шрифта-файла рисуют заново, пока false)
+     fontOf(style, role)            семейство шрифта роли стиля для холста (значение --sty-<стиль>-<роль>)
      codeTitle(api, scenes, parent, draw)  заголовок сцены кодом (fonts.title.kind "code"); → render(t)
      cssVar(name)                   значение CSS-переменной #root (--c-<роль> палитры)
      rgbOf(hex)                     [r, g, b]
@@ -199,13 +201,23 @@
     t.textContent = str;
     return t;
   }
-  /* Пиксельная надпись кодом с кириллицей: строка рисуется системным шрифтом (o.font, по умолчанию
-     «bold Arial») на маленьком холсте высотой o.rows пикселей, порог 50 % — и каждый закрашенный пиксель
-     становится квадратом o.cell px. Системный шрифт доступен сразу — результат одинаков при каждой загрузке.
+  /* Шрифты страницы загружены? Шрифт стиля — файл (@font-face кладёт сборка), он приходит не сразу: надпись,
+     нарисованная кодом по его метрикам (ширина буквы на холсте, растр пиксельной надписи), до загрузки стоит на
+     запасном шрифте. Такую надпись рисуют заново, пока ответ не станет true (codeTitle делает это сам; своя
+     надпись плагина — в render по образцу табло пикселя). Промеры и рендер ждут готовности шрифтов страницы, поэтому
+     кадр фильма — всегда с загруженным шрифтом. Правило — одно на движок, по начертанию: StageFonts.all (lib/fonts.js). */
+  function fontsReady() { return window.StageFonts.all(); }
+  /* Семейство шрифта роли стиля для холста: ctx.font не понимает var(), поэтому берётся значение переменной
+     --sty-<стиль>-<роль> (файл стиля, за ним фирменный). В SVG и CSS ставят cfg.fonts.<роль>. */
+  function fontOf(style, role) { return cssVar('--sty-' + style + '-' + role) || 'sans-serif'; }
+  /* Пиксельная надпись кодом с кириллицей: строка рисуется шрифтом o.font на маленьком холсте высотой o.rows
+     пикселей, порог 50 % — и каждый закрашенный пиксель становится квадратом o.cell px. o.font — шрифт холста
+     целиком («8px » + fontOf(стиль, роль)): пиксельный шрифт-файл в своём размере ложится в сетку точно. Без
+     o.font — жирный рубленый шрифт браузера (sans-serif, без имени). Шрифт-файл грузится не сразу — см. fontsReady.
      → {g, w, h} (размер в px полотна). */
   function pixelText(parent, str, x, y, o) {
     o = o || {};
-    var rows = o.rows || 12, cell = o.cell || 4, font = o.font || 'bold ' + rows + 'px Arial';
+    var rows = o.rows || 12, cell = o.cell || 4, font = o.font || 'bold ' + rows + 'px sans-serif';
     var c = canvas(4, 4), g = c.getContext('2d');
     g.font = font;
     var w = Math.ceil(g.measureText(str).width) + 2, h = Math.ceil(rows * 1.3);
@@ -222,18 +234,27 @@
      группа <g data-style-title="<сцена>" data-text="<заголовок>"> в слое parent; draw(g, text, box) рисует
      надпись в рамку box = {x, y, w, h} строки заголовка каркаса (px полотна) — и не выходит за неё (V22).
      Текст каркаса прячет world.css стиля: #root[data-style="<имя>"] .fr-title .t { color: transparent; }.
-     → render(t): непрозрачность группы = непрозрачность заголовка каркаса. */
+     → render(t): непрозрачность группы = непрозрачность заголовка каркаса. Надпись рисуется сразу и заново —
+     пока шрифты страницы не загрузятся (fontsReady): draw меряет буквы шрифтом-файлом стиля. */
   function codeTitle(api, scenes, parent, draw) {
-    var root = document.getElementById('root'), o0 = root.getBoundingClientRect(), items = [];
+    var root = document.getElementById('root'), o0 = root.getBoundingClientRect(), items = [], final = false;
     scenes.forEach(function (id) {
       var fr = document.getElementById('title--' + id), span = fr && fr.querySelector('.t');
       if (!span) return;
       var text = span.textContent.replace(/\s+/g, ' ').trim(), r = fr.getBoundingClientRect();
       var g = svg('g', { 'data-style-title': id, 'data-text': text }, parent);
-      draw(g, text, { x: r.left - o0.left, y: r.top - o0.top, w: r.width, h: r.height });
-      items.push({ fr: fr, g: g });
+      items.push({ fr: fr, g: g, text: text, box: { x: r.left - o0.left, y: r.top - o0.top, w: r.width, h: r.height } });
     });
+    function paint() {
+      items.forEach(function (it) {
+        while (it.g.firstChild) it.g.removeChild(it.g.firstChild);
+        draw(it.g, it.text, it.box);
+      });
+      final = fontsReady();
+    }
+    paint();
     return function (t) {
+      if (!final) paint();
       items.forEach(function (it) { api.setAttr(it.g, 'opacity', (parseFloat(it.fr.style.opacity) || 0).toFixed(3)); });
     };
   }
@@ -400,6 +421,6 @@
   window.StyleCore = { when: when, cues: cues, limb: limb, rng: rng, hash: hash, grainTiles: grainTiles, paperTile: paperTile, gridPaper: gridPaper, svg: svg,
                        defs: defs, boil: boil, hatch: hatch, halftone: halftone, vignette: vignette, roughRect: roughRect,
                        roughEllipse: roughEllipse, cssVar: cssVar, rgbOf: rgbOf, slots: slots, drawOn: drawOn, text: text,
-                       pixelText: pixelText, codeTitle: codeTitle, layoutRect: layoutRect, textZones: textZones,
+                       pixelText: pixelText, codeTitle: codeTitle, fontsReady: fontsReady, fontOf: fontOf, layoutRect: layoutRect, textZones: textZones,
                        textWindows: textWindows };
 })();

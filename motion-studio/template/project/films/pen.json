@@ -1,0 +1,20 @@
+{
+ "title": "Фикстура: буквы пером, набор букв и Lottie",
+ "scenes": ["pen-probe", "lottie-probe"],
+ "libs": ["card-kit"],
+ "stills": true,
+ "tail_sec": 1.0,
+ "voice_bars": false,
+ "replies": [
+  {"n": 1, "scene": "pen-probe", "voice": "none", "ms": 2000, "scene_start": 0, "silent": true, "what": "такт 1: заголовок, перо выходит к первой фразе"},
+  {"n": 2, "scene": "pen-probe", "voice": "none", "ms": 2000, "scene_start": 2.0, "silent": true, "what": "такт 2: перо пишет две строки"},
+  {"n": 3, "scene": "pen-probe", "voice": "none", "ms": 2000, "scene_start": 4.0, "silent": true, "what": "такт 3: провод выходит ко второй фразе"},
+  {"n": 4, "scene": "pen-probe", "voice": "none", "ms": 2000, "scene_start": 6.0, "silent": true, "what": "такт 4: за проводом идёт свет"},
+  {"n": 5, "scene": "pen-probe", "voice": "none", "ms": 2000, "scene_start": 8.0, "silent": true, "what": "такт 5: крупинки вылетают из банки"},
+  {"n": 6, "scene": "pen-probe", "voice": "none", "ms": 2000, "scene_start": 10.0, "silent": true, "what": "такт 6: третья фраза собрана"},
+  {"n": 31, "scene": "lottie-probe", "voice": "none", "ms": 2000, "scene_start": 0, "silent": true, "what": "такт 7: подпись, анимация Lottie начинает играть"},
+  {"n": 32, "scene": "lottie-probe", "voice": "none", "ms": 2000, "scene_start": 2.0, "silent": true, "what": "такт 8: анимация доиграла"},
+  {"n": 33, "scene": "lottie-probe", "voice": "none", "ms": 2000, "scene_start": 4.0, "silent": true, "what": "такт 9: последний кадр держится"}
+ ],
+ "_comment": "Приёмочный фильм букв и готовой анимации (engine/video/plugins/README.md, разделы «pen», «card-kit», «lottie»): сцена pen-probe — две фразы «пером» (плагин pen, V38) и фраза из крупинок (набор букв libs: [\"card-kit\"], V40 и V43); сцена lottie-probe — анимация Lottie (элемент kind «lottie», V39), проигрыватель — пакет lottie-web из набора Node движка (engine/video/package.json). stills: true — кадры шва между сценами и кадры детерминизма середины каждой записи и трёх моментов анимации (V41). Время — немые строки по 2 с (ролик без голоса, profiles/card.md). Порчи и образцы — engine/video/checks/red_pen.py."
+}
